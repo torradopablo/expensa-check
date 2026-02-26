@@ -362,6 +362,17 @@
     text-shadow: none !important;
   }
 
+  /* Ensure the pdf-header shows when printing from browser */
+  .pdf-header-standard {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 32px;
+    padding-bottom: 20px;
+    border-bottom: 3px solid #000000 !important;
+    width: 100%;
+  }
+
   .item-inactive {
     display: none !important;
   }
@@ -462,9 +473,8 @@
   opacity: 1 !important;
 }
 
-/* Standardized PDF Header */
+/* Standardized PDF Header — layout styles only; visibility is controlled by JS (jsPDF export) or @media print */
 .pdf-header-standard {
-  display: flex !important;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 40px;

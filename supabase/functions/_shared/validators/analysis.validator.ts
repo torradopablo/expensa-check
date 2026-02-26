@@ -28,7 +28,12 @@ export const CategorySchema = z.object({
       },
       z.number().min(0).max(100).nullable().optional()
     ),
-  })).max(20).optional(),
+    expense_type: z.enum(["ordinaria", "extraordinaria", "fondo_reserva"]).nullable().optional(),
+    provider_name: z.string().max(200).nullable().optional(),
+    provider_cuit: z.string().max(50).nullable().optional(),
+    provider_type: z.string().max(50).nullable().optional(),
+    cuit_confirmed: z.boolean().nullable().optional(),
+  })).max(300).optional(),
 });
 
 export const BuildingProfileSchema = z.object({
@@ -55,6 +60,13 @@ export const AIResponseSchema = z.object({
   previous_total: z.number().min(0).max(100000000).nullable().optional(),
   categories: z.array(CategorySchema).min(1).max(50),
   building_profile: BuildingProfileSchema.nullable().optional(),
+  building_address: z.string().max(500).nullable().optional(),
+  administrator_name: z.string().max(200).nullable().optional(),
+  administrator_cuit: z.string().max(50).nullable().optional(),
+  administrator_cuit_confirmed: z.boolean().nullable().optional(),
+  administrator_contact_phone: z.string().max(100).nullable().optional(),
+  administrator_contact_email: z.string().max(100).nullable().optional(),
+  administrator_contact_address: z.string().max(500).nullable().optional(),
 });
 
 export function validateAIResponse(data: unknown): AIResponse {

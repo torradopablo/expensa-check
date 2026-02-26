@@ -41,7 +41,11 @@ import {
   User,
   Building,
   Users,
-  Loader2
+  Loader2,
+  AlertTriangle,
+  Clock,
+  RefreshCw,
+  Ban
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -226,15 +230,15 @@ const Historial = () => {
 
 
 
-  // Separate failed analyses from successful/processing ones
-  const failedAnalyses = useMemo(() => {
-    return analyses.filter(a => a.status === "failed");
+  // Separate problematic analyses (failed OR stuck processing) from completed ones
+  const attentionAnalyses = useMemo(() => {
+    return analyses.filter(a => a.status === "failed" || a.status === "processing" || a.status === "paid");
   }, [analyses]);
 
   // Filter and sort successful/processing analyses
   const filteredCompletedAnalyses = useMemo(() => {
     const relevantAnalyses = analyses.filter(a =>
-      ["completed", "processing", "paid"].includes(a.status)
+      a.status === "completed"
     );
 
     const filtered = relevantAnalyses.filter(analysis => {
@@ -310,7 +314,7 @@ const Historial = () => {
                 <h1 className="text-4xl font-extrabold tracking-tight">Mis Expensas</h1>
                 <p className="text-muted-foreground font-medium mt-1">
                   {totalCount > 0
-                    ? `Mostrando ${filteredCompletedAnalyses.length + failedAnalyses.length} de ${totalCount} análisis`
+                    ? `Mostrando ${filteredCompletedAnalyses.length + attentionAnalyses.length} de ${totalCount} análisis`
                     : "0 análisis"}
                 </p>
               </div>
@@ -410,52 +414,106 @@ const Historial = () => {
             </Card>
           )}
 
-          {/* Failed Analyses Section */}
-          {failedAnalyses.length > 0 && (
+          {/* Attention Section: failed + processing/stuck */}
+          {attentionAnalyses.length > 0 && (
             <div className="mb-10 space-y-4">
               <div className="flex items-center gap-2 px-1 mb-4">
-                <div className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
-                <h2 className="text-sm font-black uppercase tracking-widest text-destructive">
-                  Análisis con errores ({failedAnalyses.length})
+                <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                <h2 className="text-sm font-black uppercase tracking-widest text-amber-600">
+                  Requieren atención ({attentionAnalyses.length})
                 </h2>
               </div>
               <div className="grid gap-4">
-                {failedAnalyses.map((analysis, index) => (
-                  <Link
-                    key={analysis.id}
-                    to={`/analizar?payment=success&analysisId=${analysis.id}`}
-                    className="block"
-                  >
+                {attentionAnalyses.map((analysis) => {
+                  const isFailed = analysis.status === "failed";
+                  const isStuck = analysis.status === "processing" || analysis.status === "paid";
+
+                  // Consider processing "stuck" if created more than 10 minutes ago
+                  const createdAt = new Date(analysis.created_at).getTime();
+                  const minutesElapsed = (Date.now() - createdAt) / 1000 / 60;
+                  const isLikelyStuck = isStuck && minutesElapsed > 10;
+
+                  return (
                     <Card
-                      className="group transition-all duration-300 rounded-[1.5rem] bg-destructive/5 border-destructive/20 hover:border-destructive/40 shadow-md hover:shadow-xl"
+                      key={analysis.id}
+                      className={`group transition-all duration-300 rounded-[1.5rem] shadow-md hover:shadow-xl ${isFailed
+                          ? "bg-destructive/5 border-destructive/20 hover:border-destructive/40"
+                          : isLikelyStuck
+                            ? "bg-amber-500/5 border-amber-500/30 hover:border-amber-500/50"
+                            : "bg-primary/5 border-primary/20 hover:border-primary/40"
+                        }`}
                     >
                       <CardContent className="p-6 md:p-8">
-                        <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
-                          <div className="flex items-center gap-5">
-                            <div className="w-12 h-12 rounded-xl bg-destructive/10 flex items-center justify-center text-destructive">
-                              <X className="w-6 h-6" />
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
+                          <div className="flex items-center gap-4">
+                            {/* Status icon */}
+                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${isFailed
+                                ? "bg-destructive/10 text-destructive"
+                                : isLikelyStuck
+                                  ? "bg-amber-500/10 text-amber-600"
+                                  : "bg-primary/10 text-primary"
+                              }`}>
+                              {isFailed ? (
+                                <X className="w-6 h-6" />
+                              ) : isLikelyStuck ? (
+                                <AlertTriangle className="w-6 h-6" />
+                              ) : (
+                                <Loader2 className="w-6 h-6 animate-spin" />
+                              )}
                             </div>
+
                             <div>
-                              <p className="text-sm font-bold text-destructive/80 truncate mb-1">
-                                {analysis.building_name || "Error en identificación"}
+                              <p className={`text-sm font-bold truncate mb-0.5 ${isFailed ? "text-destructive/80" : isLikelyStuck ? "text-amber-600" : "text-primary"
+                                }`}>
+                                {analysis.building_name || "Identificando edificio..."}
                               </p>
                               <h3 className="text-xl font-black text-foreground">{analysis.period}</h3>
-                              <p className="text-xs font-medium text-destructive mt-1 italic">Hacer clic para intentar procesar de nuevo</p>
+                              <p className={`text-xs font-semibold mt-1 flex items-center gap-1.5 ${isFailed ? "text-destructive" : isLikelyStuck ? "text-amber-600" : "text-primary"
+                                }`}>
+                                {isFailed ? (
+                                  <><AlertTriangle className="w-3 h-3" /> Error en el procesamiento</>
+                                ) : isLikelyStuck ? (
+                                  <><Clock className="w-3 h-3" /> Demorado — {Math.round(minutesElapsed)} min esperando</>
+                                ) : (
+                                  <><Loader2 className="w-3 h-3 animate-spin" /> Procesando con IA... {Math.round(minutesElapsed)} min</>
+                                )}
+                              </p>
                             </div>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="rounded-full opacity-0 group-hover:opacity-100 hover:bg-destructive/10 text-destructive"
-                            onClick={(e) => handleDeleteClick(analysis, e)}
-                          >
-                            <Trash2 className="w-5 h-5" />
-                          </Button>
+
+                          {/* Action buttons */}
+                          <div className="flex items-center gap-2 sm:flex-shrink-0">
+                            <Button
+                              asChild
+                              variant="outline"
+                              size="sm"
+                              className={`rounded-full px-5 font-bold gap-2 ${isFailed
+                                  ? "border-destructive/40 text-destructive hover:bg-destructive/10"
+                                  : isLikelyStuck
+                                    ? "border-amber-500/40 text-amber-700 hover:bg-amber-500/10"
+                                    : "border-primary/30 text-primary hover:bg-primary/10"
+                                }`}
+                            >
+                              <Link to={`/analizar?payment=success&analysisId=${analysis.id}`}>
+                                <RefreshCw className="w-3.5 h-3.5" />
+                                {isFailed ? "Reintentar" : "Verificar estado"}
+                              </Link>
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="rounded-full h-9 w-9 border border-border/50 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 text-muted-foreground"
+                              title="Cancelar y eliminar"
+                              onClick={(e) => handleDeleteClick(analysis, e)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
-                  </Link>
-                ))}
+                  );
+                })}
               </div>
               <div className="h-px bg-border/50 my-8" />
             </div>

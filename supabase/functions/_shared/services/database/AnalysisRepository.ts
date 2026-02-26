@@ -44,6 +44,8 @@ export class AnalysisRepository {
     evolution_analysis: string;
     deviation_stats: any;
     building_profile_id: string;
+    administrator_name: string;
+    administrator_cuit: string;
   }>) {
     const { data, error } = await this.supabase
       .from("expense_analyses")
@@ -139,10 +141,64 @@ export class AnalysisRepository {
     amount: number;
     percentage?: number | null;
     expense_type?: string | null;
+    provider_name?: string | null;
+    provider_cuit?: string | null;
   }>) {
     const { data, error } = await this.supabase
       .from("expense_subcategories")
       .insert(subcategories)
+      .select();
+
+    return { data, error };
+  }
+
+  async createAnonymizedProviderPrices(prices: Array<{
+    provider_name: string;
+    provider_cuit?: string | null;
+    provider_type?: string | null;
+    cuit_confirmed?: boolean | null;
+    category_name: string;
+    subcategory_name: string;
+    amount: number;
+    expense_type?: string | null;
+    period: string;
+    period_month?: number | null;
+    period_year?: number | null;
+    building_zone?: string | null;
+    building_unit_count?: string | null;
+    city?: string | null;
+    neighborhood?: string | null;
+    province?: string | null;
+    raw_building_address?: string | null;
+  }>) {
+    const { data, error } = await this.supabase
+      .from("anonymized_provider_prices")
+      .insert(prices)
+      .select();
+
+    return { data, error };
+  }
+
+  async createAnonymizedAdministratorData(adminData: {
+    administrator_name: string;
+    administrator_cuit?: string | null;
+    cuit_confirmed?: boolean | null;
+    contact_phone?: string | null;
+    contact_email?: string | null;
+    contact_address?: string | null;
+    period: string;
+    period_month?: number | null;
+    period_year?: number | null;
+    building_zone?: string | null;
+    building_unit_count?: string | null;
+    city?: string | null;
+    neighborhood?: string | null;
+    province?: string | null;
+    raw_building_address?: string | null;
+  }) {
+    const { data, error } = await this.supabase
+      .from("anonymized_administrator_data")
+      .insert(adminData)
       .select();
 
     return { data, error };

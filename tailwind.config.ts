@@ -111,6 +111,16 @@ export default {
           "0%, 100%": { opacity: "1" },
           "50%": { opacity: "0.5" },
         },
+        "gradient-x": {
+          "0%, 100%": {
+            "background-size": "200% 200%",
+            "background-position": "left center"
+          },
+          "50%": {
+            "background-size": "200% 200%",
+            "background-position": "right center"
+          }
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -121,6 +131,7 @@ export default {
         "slide-in-right": "slide-in-right 0.5s ease-out forwards",
         "float": "float 3s ease-in-out infinite",
         "pulse-slow": "pulse 3s ease-in-out infinite",
+        "gradient-x": "gradient-x 4s ease infinite",
       },
     },
   },

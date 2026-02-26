@@ -46,7 +46,11 @@ export class ExpenseAnalysisService {
     const systemPrompt = this.getSystemPrompt(true, previousCategories, existingBuildingNames);
 
     // Protection against extremely large texts
-    const truncatedText = text.length > 80000 ? text.substring(0, 80000) + "..." : text;
+    let truncatedText = text;
+    if (text.length > 80000) {
+      // Keep start and end of the document (usually contains totals and unit details)
+      truncatedText = text.substring(0, 40000) + "\n...[CONTENIDO OMITIDO EN EL MEDIO PARA OPTIMIZAR]...\n" + text.substring(text.length - 40000);
+    }
 
     const prompt = `Analizá esta liquidación de expensas (texto extraído por OCR). 
 Tarea: Limpia errores de lectura, identifica montos (puntos/comas) y extrae los datos JSON.
@@ -69,11 +73,39 @@ REGLAS DE SALIDA:
     return this.parseAIResponse(content);
   }
 
+  private validateCUIT(cuit: string | null): boolean {
+    if (!cuit) return false;
+    const cleanCuit = cuit.replace(/[^0-9]/g, '');
+    if (cleanCuit.length !== 11) return false;
+
+    const multiplicadores = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
+    let suma = 0;
+    for (let i = 0; i < 10; i++) {
+      suma += parseInt(cleanCuit[i]) * multiplicadores[i];
+    }
+
+    const resto = suma % 11;
+    let digitoEsperado = resto === 0 ? 0 : 11 - resto;
+    if (digitoEsperado === 11) digitoEsperado = 0;
+
+    // Special cases for modulo 11 in CUIT
+    if (resto === 1) {
+      if (cleanCuit.startsWith('20')) digitoEsperado = 9;
+      else if (cleanCuit.startsWith('27')) digitoEsperado = 4;
+      else digitoEsperado = 9;
+    }
+
+    return digitoEsperado === parseInt(cleanCuit[10]);
+  }
+
   private parseAIResponse(content: string): AIResponse {
     let cleanedContent = content;
 
     // Log for debugging (truncated in console/logs is normal but helps see the start)
     console.log(`AI Response start: ${content.substring(0, 200)}...`);
+
+    // Fixer: Clean invisible characters (zero-width spaces, etc.)
+    cleanedContent = cleanedContent.replace(/[\u200B-\u200D\uFEFF]/g, '');
 
     cleanedContent = cleanedContent.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
 
@@ -89,28 +121,51 @@ REGLAS DE SALIDA:
     try {
       const data = JSON.parse(cleanedContent.trim());
 
-      // Ensure mathematical consistency programmatically
+      // Ensure subcategory sums match their parent category (granular data takes precedence)
       if (data.categories && Array.isArray(data.categories)) {
         data.categories.forEach((cat: any) => {
           if (cat.subcategories && Array.isArray(cat.subcategories) && cat.subcategories.length > 0) {
             const subSum = cat.subcategories.reduce((sum: number, sub: any) => sum + (Number(sub.amount) || 0), 0);
-
-            // If subcategories sum is different from category amount, we trust the subcategories (more granular)
             if (subSum > 0 && Math.abs(subSum - cat.current_amount) > 1) {
-              console.warn(`Adjusting category ${cat.name} amount from ${cat.current_amount} to ${subSum} for consistency with subcategories.`);
+              console.warn(`Adjusting category ${cat.name} from ${cat.current_amount} to ${subSum}`);
               cat.current_amount = subSum;
             }
           }
         });
 
+        // NOTE: We intentionally do NOT override total_amount with the categories sum.
+        // If they diverge significantly it means the AI mixed scales (unit vs consorcio).
+        // Log it for debugging but trust the AI's explicit total_amount field.
         const categoriesSum = data.categories.reduce((sum: number, cat: any) => sum + (Number(cat.current_amount) || 0), 0);
-
-        // If the sum of categories is significantly different (> 10%) from the total_amount,
-        // we prioritize the sum of categories as it's the more detailed data source.
-        if (categoriesSum > 0 && Math.abs(categoriesSum - data.total_amount) > (data.total_amount * 0.1)) {
-          console.warn(`Programmatically adjusting total_amount from ${data.total_amount} to ${categoriesSum} for consistency.`);
-          data.total_amount = categoriesSum;
+        if (categoriesSum > 0 && Math.abs(categoriesSum - data.total_amount) > (data.total_amount * 0.15)) {
+          console.warn(`WARNING: categories sum (${categoriesSum}) differs >15% from total_amount (${data.total_amount}). Possible scale mix-up in AI response.`);
         }
+      }
+
+      // 1. Validation of Totales (Checksum Interno)
+      if (data.total_amount && data.unit_coefficient && data.unit_amount) {
+        const expectedUnitTotal = data.total_amount * data.unit_coefficient;
+        const tolerance = 500; // Allow for rounding differences
+        if (Math.abs(expectedUnitTotal - data.unit_amount) > tolerance) {
+          console.warn(`CHECKSUM ERROR: Total Consorcio (${data.total_amount}) * Coef (${data.unit_coefficient}) = ${expectedUnitTotal} vs Unit Total reported (${data.unit_amount})`);
+        }
+      }
+
+      // Control de Alucinaciones en CUITs
+      if (data.administrator_cuit) {
+        data.administrator_cuit_confirmed = this.validateCUIT(data.administrator_cuit);
+      }
+
+      if (data.categories && Array.isArray(data.categories)) {
+        data.categories.forEach((cat: any) => {
+          if (cat.subcategories && Array.isArray(cat.subcategories)) {
+            cat.subcategories.forEach((sub: any) => {
+              if (sub.provider_cuit) {
+                sub.cuit_confirmed = this.validateCUIT(sub.provider_cuit);
+              }
+            });
+          }
+        });
       }
 
       return data;
@@ -118,11 +173,6 @@ REGLAS DE SALIDA:
       console.error("JSON parsing error:", error);
       console.error("Cleaned content length:", cleanedContent.length);
       console.error("Original content length:", content.length);
-
-      // Fallback for truncated JSON - try to close it if it ends abruptly (very basic attempt)
-      if (cleanedContent.lastIndexOf('}') < cleanedContent.lastIndexOf('{')) {
-        console.warn("JSON seems truncated, attempt to return partial or error.");
-      }
 
       return {
         building_name: "Error en parsing",
@@ -159,85 +209,162 @@ REGLAS DE SALIDA:
     existingBuildingNames: string[] = []
   ): string {
     const categoriesGuide = previousCategories.length > 0
-      ? `\nGUÍA DE CATEGORÍAS PREVIAS (Usa estos nombres si el concepto es el mismo):
-${previousCategories.map(c => `- ${c}`).join('\n')}\n`
+      ? `\nGUÍA DE CATEGORÍAS PREVIAS (Usa estos nombres si el concepto es el mismo):\n${previousCategories.map(c => `- ${c}`).join('\n')}\n`
       : "";
 
     const buildingGuide = existingBuildingNames.length > 0
-      ? `\nGUÍA DE EDIFICIOS EXISTENTES (Si el edificio es uno de estos, usa el nombre EXACTO):
-${existingBuildingNames.map(b => `- ${b}`).join('\n')}\n`
+      ? `\nGUÍA DE EDIFICIOS EXISTENTES (Si el edificio es uno de estos, usa el nombre EXACTO):\n${existingBuildingNames.map(b => `- ${b}`).join('\n')}\n`
       : "";
 
-    return `Eres un experto en liquidaciones de expensas argentinas. Devuelve ÚNICAMENTE JSON plano.
-No incluyas explicaciones externas al JSON. 
-Si hay muchas categorías, sé breve en las descripciones.
+    return `Eres un experto en liquidaciones de expensas argentinas. Devuelve ÚNICAMENTE JSON plano sin texto adicional.
 ${buildingGuide}${categoriesGuide}
-REGLAS CRÍTICAS DE NEGOCIO:
-1. El campo "status" en cada categoría DEBE ser estrictamente uno de estos: "ok", "attention", "info".
-2. Los montos deben ser números positivos.
-3. El JSON debe ser válido y completo.
-4. CONSISTENCIA MATEMÁTICA (CRUCIAL): La suma de las categorías DEBE ser igual al "total_amount". Además, la suma de los montos de las subcategorías DEBE ser exactamente igual al "current_amount" de su categoría padre.
-   - A veces el documento muestra el "Total del Consorcio" (millones) y el "Total por Unidad" (miles). 
-   - Debes elegir UNA escala: Si las categorías son del Consorcio, el "total_amount" DEBE ser el total del Consorcio. 
-   - NUNCA mezcles categorías de millones con un total de miles. Si el total por unidad es $127.000 pero los gastos suman $14.000.000, el "total_amount" DEBE ser $14.000.000.
-6. IMPORTANTE - IDENTIFICACIÓN DEL EDIFICIO (ESTRATEGIA ARGEN-HEADER):
-   - UBICACIÓN PREFERENTE: El nombre real suele estar ARRIBA de todo, a menudo centrado o a la izquierda.
-   - PATRONES COMUNES: 
-     a) "CONSORCIO [DIRECCIÓN]" (Ej: CONSORCIO CALLAO 1540) -> El nombre es "Callao 1540".
-     b) "CONSORCIO DE PROPIETARIOS DEL EDIFICIO [NOMBRE]" -> Usa el [NOMBRE].
-     c) Solo la dirección: "CALLE NUMERO, Ciudad" -> Usa "Calle Numero".
-   - CUIT DEL EDIFICIO: Casi siempre hay un CUIT (30-... o 33-...) cerca del nombre del consorcio. Úsalo como ancla. El CUIT de la administración suele estar en el pie de página o en un recuadro separado de "Datos del Administrador".
-   - REGLA DE EXCLUSIÓN TOTAL: Si un nombre está asociado a "Administración", "Administradora", "Adm.", "Estudio", "Adms. de Inmuebles" o "Liquidó", ESE NO ES EL EDIFICIO. 
-     - Ej: Si dice "Administración Los Robles" y abajo "CONSORCIO RIVADAVIA 500", el edificio es "Rivadavia 500".
-     - Si dice "Estudio Jurídico Pérez" en grande, ignóralo y busca el nombre del consorcio.
-   - Si se proporciona una GUÍA DE EDIFICIOS EXISTENTES, prioriza esos nombres si hay un match parcial (ej: el PDF dice "Arenales 10" y la guía dice "Arenales 10 - Torre A").
-   - IMPORTANTE: Si solo encuentras una dirección, ese ES el nombre del edificio. No inventes nombres si no están.
-8. IMPORTANTE - CLASIFICACIÓN DE GASTOS (NUEVO):
-   - Cada subcategoría DEBE tener un "expense_type" estrictamente limitado a: "ordinaria", "extraordinaria", o "fondo_reserva".
-   - CRITERIOS PARA ARGENTINA:
-     - "ordinaria": Gastos recurrentes de mantenimiento, sueldos, cargas sociales, abonos de servicios (ascensores, limpieza), reparaciones menores, seguros obligatorios, papelería.
-     - "extraordinaria": Reparaciones estructurales grandes (fachada, cañería principal), reemplazo de bienes de capital (bombas nuevas, cámaras), indemnizaciones laborales por despido, juicios del consorcio.
-     - "fondo_reserva": Ahorro mensual o cuota para futuros gastos.
-     - REGLA DE ORO: Si no estás seguro, marca como "ordinaria". Prioriza "extraordinaria" solo si el documento lo menciona explícitamente o es un gasto claramente no recurrente de gran impacto estructural.
-9. IMPORTANTE: Si se proporciona una GUÍA DE CATEGORÍAS PREVIAS, intenta mapear los gastos encontrados a esos nombres exactos si representan el mismo concepto.
+═══════════════════════════════════════════════════════════════
+REGLA 1 — TOTAL DEL CONSORCIO vs TOTAL POR UNIDAD (CRÍTICO)
+═══════════════════════════════════════════════════════════════
+Las expensas argentinas muestran DOS totales distintos:
+  • "Total del Consorcio" o "Total General": suma de TODO el edificio (ej: $14.500.000)
+  • "Total por Unidad" o "Tu expensa" o "Importe a pagar": lo que paga UN departamento (ej: $127.000)
 
-JSON Schema:
+REGLA DE ORO: Debes extraer el TOTAL DEL CONSORCIO (no el de la unidad).
+  - El campo "total_amount" SIEMPRE debe ser el total del consorcio completo.
+  - Las categorías (Personal, Mantenimiento, etc.) también deben ser del consorcio.
+  - El campo "unit" es el número de unidad funcional (ej: "3B") si aparece.
+  - NUNCA reportes el importe por unidad como total_amount.
+  ✓ CORRECTO: total_amount = 14.500.000 (aunque la expensa de la unidad sea $127.000)
+  ✗ INCORRECTO: total_amount = 127.000
+
+ Para identificar cuál es cuál:
+  - El total del consorcio suele estar en la página de detalle general, en mayúsculas: "TOTAL GENERAL", "TOTAL CONSORCIO"
+  - El total por unidad suele decir: "Total a pagar", "Importe", "Deuda", "Su expensa", y es proporcional al coeficiente de la unidad
+
+═══════════════════════════════════════════════════════════════
+REGLA 2 — ALINEACIÓN HORIZONTAL Y TABLAS (ESTRUCTURAL)
+═══════════════════════════════════════════════════════════════
+- El texto que recibes fue extraído usando una GRILLA ESPACIAL estricta. Conserva la tabulación y alineación exacta del PDF original.
+- Si ves largas cadenas de espacios en blanco, significa que hay un salto real de columna.
+- ES CRÍTICO asegurar que el "amount" que extraes sea el de la misma fila horizontal que el concepto. NO saltes de línea.
+- Si una descripción ocupa 2 o 3 líneas, el monto suele estar alineado en la columna de la derecha sobre la PRIMERA o ÚLTIMA línea del texto de descripción.
+- NUNCA asocies el importe de una fila inferior a un proveedor de arriba.
+- Utiliza la alineación vertical de los números (columnas) para distinguir "Erogaciones/Gastos" de "Saldos Adicionales".
+
+═══════════════════════════════════════════════════════════════
+REGLA 3 — CONCEPTOS NEGATIVOS (CRÍTICO)
+═══════════════════════════════════════════════════════════════
+- Identifica montos que RESTAN (notas de crédito, bonificaciones, descuentos, devoluciones).
+- Busca símbolos "-" o palabras: "Crédito", "Bonificación", "Descuento", "Devolución".
+- Estos deben ser valores NEGATIVOS en el JSON.
+
+═══════════════════════════════════════════════════════════════
+REGLA 4 — DISTINCIÓN DE COLUMNAS (GASTO vs SALDO)
+═══════════════════════════════════════════════════════════════
+- IGNORA las columnas de "Saldo Anterior", "Intereses por Mora" o "Deuda".
+- Extrae SOLO los montos de la columna de "Gasto", "Erogación" o "Cuota del Mes".
+
+═══════════════════════════════════════════════════════════════
+REGLA 5 — CLASIFICACIÓN SEMÁNTICA (IMPORTANTE)
+═══════════════════════════════════════════════════════════════
+- "SUTERH", "AFIP", "Cargas Sociales", "FATERYH" -> Categoría "Sueldos y Cargas Sociales", type "personal"
+- "Metrogas", "Naturgy" -> Categoría "Servicios Públicos", type "gas"
+- "Edesur", "Edenor" -> Categoría "Servicios Públicos", type "electricidad"
+- "AySA" -> Categoría "Servicios Públicos", type "agua"
+
+═══════════════════════════════════════════════════════════════
+REGLA 6 — IDENTIFICACIÓN DEL EDIFICIO vs ADMINISTRACIÓN
+═══════════════════════════════════════════════════════════════
+- El building_name es el CONSORCIO (ej: "CONSORCIO PUEYRREDON 1234").
+- EXCLUYE nombres de "Estudios", "Administradoras" o "Liquidadores" de este campo.
+
+═══════════════════════════════════════════════════════════════
+REGLA 7 — EXTRACCIÓN LÍNEA POR LÍNEA (SIN EXCEPCIONES)
+═══════════════════════════════════════════════════════════════
+- CADA ÚNICA línea de gasto en el PDF DEBE ser una subcategoría independiente.
+- ESTÁ PROHIBIDO AGRUPAR. Si hay 5 facturas de mantenimiento, reporta 5 subcategorías. 
+- Copia el nombre del proveedor o concepto exactamente como aparece.
+
+═══════════════════════════════════════════════════════════════
+REGLA 8 — DETECCIÓN DE GASTOS EXTRAORDINARIOS
+═══════════════════════════════════════════════════════════════
+- Marca con expense_type: "extraordinaria" TODO gasto que diga "Extraordinaria", "Obra", "Mejora", "Juicio", "Indemnización".
+- Úsalo también para arreglos grandes (ej: reparación de caldera, pintura de fachada).
+
+═══════════════════════════════════════════════════════════════
+REGLA 9 — INSIGHTS Y ALERTAS PARA EL USUARIO
+═══════════════════════════════════════════════════════════════
+- Si detectas algo inusual (sobreprecio, multas, intereses por mora en servicios públicos), explícalo en "explanation".
+- Empatiza con el usuario: "Atención: se pagó una multa por falta de matafuegos."
+- Cambia el status de la categoría a "attention".
+
+═══════════════════════════════════════════════════════════════
+REGLA 10 — VERIFICACIÓN MATEMÁTICA (AUTOCORRECCIÓN)
+═══════════════════════════════════════════════════════════════
+- El "current_amount" de cada categoría DEBE ser la suma EXACTA de todas sus subcategorías.
+- Si no coinciden, es una señal de que omitiste extraer líneas del PDF. Revisalo antes de responder.
+
+
+JSON Schema a devolver:
 {
   "building_name": string,
+  "building_address": string | null,
   "period": string,
   "period_month": number (1-12),
   "period_year": number (YYYY),
-  "unit": string o null,
+  "unit": string | null,
+  "unit_amount": number | null,
+  "unit_coefficient": number | null,
   "total_amount": number,
   "categories": [
     {
       "name": string,
-      "icon": string (use Lucide icon name),
+      "icon": string,
       "current_amount": number,
       "status": "ok" | "attention" | "info",
-      "explanation": string o null,
+      "explanation": string | null,
       "subcategories": [
         {
           "name": string,
           "amount": number,
-          "percentage": number (0-100),
-          "expense_type": "ordinaria" | "extraordinaria" | "fondo_reserva"
+          "percentage": number,
+          "expense_type": "ordinaria" | "extraordinaria" | "fondo_reserva",
+          "provider_name": string | null,
+          "provider_cuit": string | null,
+          "provider_type": string | null,
+          "cuit_confirmed": boolean
         }
-      ] (mínimo 3 sub-ítems si existen, máximo 10)
+      ]
     }
   ],
   "building_profile": {
     "country": "Argentina",
-    "province": string o null,
-    "city": string o null,
-    "neighborhood": string o null,
+    "province": string | null,
+    "city": string | null,
+    "neighborhood": string | null,
     "zone": "CABA" | "GBA Norte" | "GBA Oeste" | "GBA Sur" | "Interior" | null,
     "unit_count_range": "1-10" | "11-30" | "31-50" | "51-100" | "100+" | null,
-    "age_category": string o null,
+    "age_category": string | null,
     "has_amenities": boolean,
     "amenities": string[]
-  }
-}`;
+  },
+  "administrator_name": string | null,
+  "administrator_cuit": string | null,
+  "administrator_cuit_confirmed": boolean,
+  "administrator_contact_phone": string | null,
+  "administrator_contact_email": string | null,
+  "administrator_contact_address": string | null
+}
+
+═══════════════════════════════════════════════════════════════
+FEW-SHOT EXAMPLES (APRENDER DEL PATRÓN):
+═══════════════════════════════════════════════════════════════
+Ejemplo 1 (Tabla con columnas): 
+"Consorcio Calle Falsa 123   Página 1   TOTAL: $1.000.000
+Unidad: 45   Coef: 0.015   Monto: $15.000"
+-> JSON: {"total_amount": 1000000, "unit": "45", "unit_coefficient": 0.015, "unit_amount": 15000, ...}
+
+Ejemplo 2 (Triple espacio como separador):
+"Abono Ascensores ABC S.A.   $50.000   ordinaria
+Mantenimiento Portón   $10.000   ordinaria"
+-> JSON: {"categories": [{"name": "Mantenimiento", "subcategories": [{"name": "Abono Ascensores ABC S.A.", "amount": 50000}, {"name": "Mantenimiento Portón", "amount": 10000}]}]}
+`;
   }
 
   private getAnalysisPrompt(isPDF: boolean): string {
