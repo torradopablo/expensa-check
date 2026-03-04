@@ -524,8 +524,8 @@ const PrepararReunion = () => {
                         </div>
                     ) : (
                         <div id="meeting-temario-content" className="space-y-8 animate-fade-in print:p-0">
-                            {/* PDF ONLY HEADER - Standardized */}
-                            <div id="pdf-header" className="hidden pdf-header-standard">
+                            {/* PDF / PRINT HEADER — visible only when printing or exporting, hidden on screen */}
+                            <div id="pdf-header" className="hidden print:flex pdf-header-standard">
                                 <div className="logo-section">
                                     <div className="w-14 h-14">
                                         <Logo className="w-full h-full" />

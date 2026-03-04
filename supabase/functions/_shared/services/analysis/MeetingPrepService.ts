@@ -33,17 +33,17 @@ REGLA CRÍTICA: Debes responder EXCLUSIVAMENTE con un objeto JSON válido. No in
 El JSON debe seguir la estructura solicitada estrictamente.`;
 
         const prompt = `Generá una propuesta integral para la reunión del consorcio "${data.buildingName}". 
-El objetivo es que el administrador esté 100% preparado para las consultas de los propietarios y tenga un temario claro.
+El objetivo es que el administrador esté 100% preparado para las consultas de los propietarios y tenga un temario claro y contundente basado puramente en datos.
 
 DATOS DE GASTOS Y ALERTAS (Basado en el análisis de expensas):
-${data.analyses.map(a => `- Período ${a.period}: Total ${a.total_amount}. 
+${data.analyses.map(a => `- Período ${a.period}: Total $${a.total_amount}. 
   Detalle por Rubro y Sub-detalles:
-  ${a.categories?.map((c: any) => {
+${a.categories?.map((c: any) => {
             const subs = c.expense_subcategories && c.expense_subcategories.length > 0
-                ? ` (Sub-ítems: ${c.expense_subcategories.map((s: any) => `${s.name}: ${s.amount}`).join(', ')})`
+                ? `\n      * Sub-ítems: ${c.expense_subcategories.map((s: any) => `${s.name}: $${s.amount}`).join(' | ')}`
                 : '';
-            return `- ${c.name}: ${c.current_amount}${subs}${c.status !== 'ok' ? ` [Alerta: ${c.explanation || 'Revisar'}]` : ''}`;
-        }).join('\n  ') || 'Ninguna'}`).join('\n')}
+            return `    - ${c.name}: $${c.current_amount}${subs}${c.status !== 'ok' ? `\n      * Alerta: ${c.explanation || 'Revisar'}` : ''}`;
+        }).join('\n') || '    Ninguna'}`).join('\n')}
 
 RECLAMOS Y COMENTARIOS DE PROPIETARIOS (Externos):
 ${data.commentsByType.shared.length > 0
@@ -56,18 +56,19 @@ ${data.commentsByType.owner.length > 0
                 ? data.commentsByType.owner.map(c => `- Comentario interno: "${c.comment}"`).join('\n')
                 : ""}
 
-INSTRUCCIONES PARA EL CONTENIDO:
+INSTRUCCIONES PARA EL CONTENIDO (CRÍTICO PARA RESOLVER CON ÉXITO):
 1. "items": Puntos del temario oficial.
    - "title": Título breve y profesional.
-   - "description": Explicación DETALLADA del tema. Contexto completo para que todos entiendan de qué se trata.
-   - "problem": (Nuevo) Definición clara del problema o dolor detectado (ej: "Aumento desmedido en factura eléctrica").
-   - "proposed_solution": (Nuevo) Propuesta concreta de solución o curso de acción para votar (ej: "Instalar sensores de movimiento en palieres").
-   - Integrá los reclamos de propietarios o notas administrativas si son relevantes.
+   - "description": Explicación DETALLADA del tema. DEBE utilizar información "masticada", incluyendo datos concretos de las SUBCATEGORÍAS y los montos exactos involucrados. No uses lenguaje genérico: hablá de pesos ($).
+   - "problem": Definición clara del problema o dolor detectado (ej: "Aumento desmedido de $500,000 en el sub-ítem Aysa respecto de lo habitual"). Sé específico con el proveedor o sub-ítem si la data lo permite.
+   - "proposed_solution": Propuesta concreta de solución o curso de acción para votar (ej: "Aprobar presupuesto B para cambiar cañerías para reducir fugas"), sustentada en la data evidenciada.
+   - Integrá los reclamos de propietarios o notas administrativas citándolos si son relevantes.
 
-2. "preparation_guide": Una sección para uso exclusivo del administrador que contenga:
-    - "anticipated_questions": Las 3 o 4 preguntas más difíciles o probables que harán los propietarios basadas en los aumentos detectados y sus comentarios, y la respuesta sugerida con datos concretos.
-    - "key_figures": 3 o 4 datos numéricos clave que el administrador debe tener "en la punta de la lengua" (ej: % de aumento acumulado, % de incidencia de sueldos, monto total de morosos).
+2. "preparation_guide": Una guía táctica de uso exclusivo para el administrador.
+    - "anticipated_questions": Las 3 o 4 preguntas más difíciles o "picantes" que harán los vecinos, fuertemente basadas en los saltos de gastos de las SUBCATEGORÍAS detalladas. La "answer" sugerida DEBE dar argumentos sólidos con DATOS CONCRETOS (pesos, impacto exacto en el total, razones objetivas).
+    - "key_figures": 3 o 4 "Balas de Plata" o datos numéricos clave ya calculados e irrefutables que el administrador debe decir para ganar el argumento (ej: "El incremento de sueldos (Sub-ítem X) representó el 85% del aumento total de este mes").
 
+Escribí SIEMPRE en Español Argentino (vos, tenés, expensas, consorcio, encargado).
 ESTRUCTURA DE SALIDA (JSON):
 {
   "title": "Temario Estratégico: Reunión de Consorcio - ${data.buildingName}",

@@ -43,7 +43,12 @@ import {
   CartesianGrid,
   Tooltip as RechartsTooltip,
   ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
 } from "recharts";
+import { useState } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 
 import { EvolutionComparisonChart } from "@/components/EvolutionComparisonChart";
 import { ComparisonChart } from "@/components/ComparisonChart";
@@ -90,64 +95,72 @@ const expenseData = {
   previousTotal: 98500,
   categories: [
     {
-      name: "Sueldo encargado",
+      id: "cat1",
+      name: "Sueldos y Cargas Sociales",
       icon: Users,
       current: 52000,
       previous: 45000,
-      status: "ok" as "ok" | "attention" | "info",
-      explanation: "Aumento del 15.5% por paritarias. Dentro de lo esperado."
+      status: "ok" as const,
+      explanation: "Aumento del 15.5% por paritarias del SUTERH. Incluye bono navideño proporcional.",
+      subcategories: [
+        { name: "Sueldo Encargado", amount: 38500, type: "ordinaria" },
+        { name: "Cargas Sociales (AFIP)", amount: 11000, type: "ordinaria" },
+        { name: "Bono Navidad", amount: 2500, type: "ordinaria" }
+      ]
     },
     {
-      name: "Electricidad",
+      id: "cat2",
+      name: "Servicios Públicos",
       icon: Zap,
       current: 28500,
       previous: 18200,
-      status: "attention" as "ok" | "attention" | "info",
-      explanation: "Subió un 56%. Coincide con el aumento de tarifas de noviembre.",
+      status: "attention" as const,
+      explanation: "Subió un 56%. El desglose muestra que el consumo excedente en áreas comunes es el principal factor.",
       subcategories: [
-        { name: "Edesur (Consumo)", amount: 24200 },
-        { name: "Alumbrado pasillos", amount: 4300 }
+        { name: "Edesur - Áreas Comunes", amount: 15200, type: "ordinaria" },
+        { name: "Edesur - Consumo Excedente", amount: 9000, type: "ordinaria" },
+        { name: "AySA - Agua", amount: 4300, type: "ordinaria" }
       ]
     },
     {
-      name: "Agua",
-      icon: Droplets,
-      current: 12300,
-      previous: 11800,
-      status: "ok" as "ok" | "attention" | "info",
-      explanation: "Variación mínima del 4.2%.",
-      subcategories: [
-        { name: "AySA - Cargo Fijo", amount: 8100 },
-        { name: "AySA - Excedente", amount: 4200 }
-      ]
-    },
-    {
-      name: "Mantenimiento",
+      id: "cat3",
+      name: "Mantenimiento y Reparaciones",
       icon: Wrench,
       current: 18500,
       previous: 12000,
-      status: "attention" as "ok" | "attention" | "info",
-      explanation: "Reparación del portón eléctrico incluida este mes.",
+      status: "attention" as const,
+      explanation: "Reparación extraordinaria del portón incluida este mes. El resto del mantenimiento se mantiene estable.",
       subcategories: [
-        { name: "Reparación Portón", amount: 12500 },
-        { name: "Abono Ascensores", amount: 6000 }
+        { name: "Mantenimiento Ascensores", amount: 6000, type: "ordinaria" },
+        { name: "Reparación Portón (Urgencia)", amount: 10500, type: "extraordinaria" },
+        { name: "Fumigación Mensual", amount: 2000, type: "ordinaria" }
       ]
     },
     {
-      name: "Seguro",
+      id: "cat4",
+      name: "Seguros y Tasas",
       icon: Shield,
-      current: 8200,
-      previous: 7500,
-      status: "ok" as "ok" | "attention" | "info",
-      explanation: "Ajuste anual del 9.3%."
+      current: 14500,
+      previous: 13200,
+      status: "ok" as const,
+      explanation: "Ajuste por refacción de póliza integral de consorcio.",
+      subcategories: [
+        { name: "Seguro Integral", amount: 12500, type: "ordinaria" },
+        { name: "Tasas Municipales", amount: 2000, type: "ordinaria" }
+      ]
     },
     {
+      id: "cat5",
       name: "Administración",
       icon: Building,
-      current: 6300,
-      previous: 4000,
-      status: "attention" as "ok" | "attention" | "info",
-      explanation: "Aumento del 57.5%. Verificar con la administración."
+      current: 12300,
+      previous: 6100,
+      status: "attention" as const,
+      explanation: "Aumento significativo. Se detectó un cargo por 'Gastos de Papelería' inusualmente alto.",
+      subcategories: [
+        { name: "Honorarios Administrador", amount: 8500, type: "ordinaria" },
+        { name: "Gastos de Papelería/Correo", amount: 3800, type: "ordinaria" }
+      ]
     },
   ]
 };
@@ -190,31 +203,31 @@ const mockMeetingAgenda = [
     id: "1",
     importance: "high",
     category: "Administración",
-    title: "Revisión de honorarios vs Mercado",
-    description: "Se detectó que el aumento del 57.5% sitúa los honorarios significativamente por encima del promedio regional.",
-    problem: "Honorarios 57.5% por encima de la inflación anual.",
-    proposed_solution: "Solicitar recotización o presentar 3 presupuestos alternativos.",
-    source: "Comparativa de Mercado"
+    title: "Revisión de Gastos de Papelería",
+    description: "Se detectó que el rubro Administración aumentó 100%. Gracias al desglose por subcategorías, identificamos que el 30% del gasto corresponde a 'Gastos de Papelería', un valor inusual.",
+    problem: "Aumento del 100% en Administración (vs 21.4% de inflación).",
+    proposed_solution: "Solicitar facturas de librería y envíos de correo para corroborar el gasto.",
+    source: "Detalle de Subcategorías"
   },
   {
     id: "2",
     importance: "medium",
-    category: "Servicios",
-    title: "Plan de eficiencia energética",
-    description: "Debido al incremento del 56% en la tarifa eléctrica, se propone evaluar el cambio a luminarias LED.",
-    problem: "Gasto en electricidad aumentó 56% intermensual.",
-    proposed_solution: "Instalación de sensores de movimiento en palieres (ROI est. 4 meses).",
-    source: "Análisis de Evolución"
+    category: "Servicios Públicos",
+    title: "Consumo Excedente de Electricidad",
+    description: "El análisis detectó un consumo excedente significativo en Edesur. Se recomienda revisar si hay luminarias encendidas innecesariamente.",
+    problem: "Gasto en electricidad subió 56% intermensual.",
+    proposed_solution: "Instalación de sensores de movimiento en áreas comunes detectadas por la IA.",
+    source: "Detección de Anomalías"
   },
   {
     id: "3",
     importance: "low",
     category: "Mantenimiento",
-    title: "Seguimiento reparación portón",
-    description: "Verificar garantía de la reparación realizada este mes para evitar cargos duplicados.",
-    problem: "Gasto recurrente en reparación de portón (3ra vez en el año).",
-    proposed_solution: "Exigir informe técnico y garantía escrita al proveedor.",
-    source: "Detalle de Gastos"
+    title: "Garantía de Reparación Portón",
+    description: "Se registró un gasto extraordinario por la reparación del portón. Verificar si el proveedor ofrece garantía sobre el trabajo.",
+    problem: "Gasto extraordinario de $10.500 no previsto.",
+    proposed_solution: "Solicitar certificado de garantía técnica a la administración.",
+    source: "Análisis de Gastos Extraordinarios"
   }
 ];
 
@@ -249,11 +262,24 @@ const formatShortCurrency = (value: number) => {
   return `$${value}`;
 };
 
+const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#06b6d4'];
+
 const calculateChange = (current: number, previous: number) => {
   return ((current - previous) / previous) * 100;
 };
 
 const Ejemplo = () => {
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+
+  const toggleCategory = (id: string) => {
+    const newExpanded = new Set(expandedCategories);
+    if (newExpanded.has(id)) {
+      newExpanded.delete(id);
+    } else {
+      newExpanded.add(id);
+    }
+    setExpandedCategories(newExpanded);
+  };
   const totalChange = calculateChange(expenseData.total, expenseData.previousTotal);
   const attentionItems = expenseData.categories.filter(c => c.status === "attention").length;
 
@@ -295,7 +321,7 @@ const Ejemplo = () => {
               <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
                 <span className="font-bold">1</span>
               </div>
-              <h2 className="text-xl font-bold uppercase tracking-tight">Análisis Inteligente e Individual</h2>
+              <h2 className="text-xl font-bold uppercase tracking-tight">Análisis Inteligente y Desglose</h2>
             </div>
 
             {/* Summary Card */}
@@ -355,9 +381,9 @@ const Ejemplo = () => {
                   <Sparkles className="w-4 h-4 text-primary" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-primary mb-1">Resumen IA</p>
+                  <p className="text-sm font-medium text-primary mb-1">Resumen IA con Detección de Rubros</p>
                   <p className="text-sm text-muted-foreground">
-                    Tu expensa de {expenseData.period} totaliza {formatCurrency(expenseData.total)} (+{totalChange.toFixed(0)}% vs anterior). {attentionItems} categorías merecen revisión por aumentos significativos, especialmente en Electricidad y Administración.
+                    Tu expensa de {expenseData.period} totaliza {formatCurrency(expenseData.total)} (+{totalChange.toFixed(0)}% vs anterior). <strong className="text-primary font-semibold">Nuestra IA desglosó {expenseData.categories.length} rubros en subcategorías específicas</strong>, detectando aumentos críticos en Electricidad y Administración que impactan en tu liquidación final.
                   </p>
                 </div>
               </CardContent>
@@ -370,10 +396,11 @@ const Ejemplo = () => {
                 {expenseData.categories.map((category, index) => {
                   const change = calculateChange(category.current, category.previous);
                   const Icon = category.icon;
+                  const isExpanded = expandedCategories.has(category.id);
 
                   return (
                     <Card
-                      key={category.name}
+                      key={category.id}
                       variant="default"
                       className="animate-fade-in-up overflow-hidden"
                       style={{ animationDelay: `${index * 0.1}s` }}
@@ -382,9 +409,9 @@ const Ejemplo = () => {
                         <div className="flex flex-col md:flex-row">
                           <div className="flex-1 p-5 md:p-6">
                             <div className="flex items-start gap-4">
-                              <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${category.status === "attention" ? "bg-status-attention-bg" : category.status === "info" ? "bg-status-info-bg" : "bg-status-ok-bg"
+                              <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${category.status === "attention" ? "bg-status-attention-bg" : "bg-status-ok-bg"
                                 }`}>
-                                <Icon className={`w-6 h-6 ${category.status === "attention" ? "text-status-attention" : category.status === "info" ? "text-status-info" : "text-status-ok"
+                                <Icon className={`w-6 h-6 ${category.status === "attention" ? "text-status-attention" : "text-status-ok"
                                   }`} />
                               </div>
                               <div className="flex-1 min-w-0">
@@ -396,14 +423,12 @@ const Ejemplo = () => {
                                         variant={category.status}
                                         className="cursor-help transition-transform hover:scale-105"
                                       >
-                                        {category.status === "ok" ? "OK" : category.status === "info" ? "Info" : "Revisar"}
+                                        {category.status === "ok" ? "OK" : "Revisar"}
                                       </Badge>
                                     </TooltipTrigger>
                                     <TooltipContent side="top" className="max-w-xs">
                                       {category.status === "ok" ? (
                                         <p>✅ Este gasto está dentro de los parámetros normales.</p>
-                                      ) : category.status === "info" ? (
-                                        <p>ℹ️ Información relevante sobre este gasto para tu conocimiento.</p>
                                       ) : (
                                         <p>⚠️ Este gasto tuvo un aumento significativo. Te recomendamos verificarlo con la administración.</p>
                                       )}
@@ -413,13 +438,23 @@ const Ejemplo = () => {
                                 <p className="text-sm text-muted-foreground">
                                   {category.explanation}
                                 </p>
-                                {(category as any).subcategories && (
-                                  <div className="mt-3 flex flex-wrap gap-2">
-                                    {(category as any).subcategories.map((sub: any, i: number) => (
-                                      <Badge key={i} variant="outline" className="text-[10px] bg-background/50 border-border/50 font-medium">
-                                        {sub.name}: {formatCurrency(sub.amount)}
-                                      </Badge>
-                                    ))}
+                                {category.subcategories && category.subcategories.length > 0 && (
+                                  <div className="flex items-center gap-2 mt-2">
+                                    <Badge variant="secondary" className="text-[9px] px-1.5 py-0 bg-primary/20 text-primary border-none font-bold animate-pulse">
+                                      ¡NUEVO!
+                                    </Badge>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-auto p-0 text-primary font-bold text-xs hover:bg-transparent"
+                                      onClick={() => toggleCategory(category.id)}
+                                    >
+                                      {isExpanded ? (
+                                        <>Ocultar detalle <ChevronUp className="w-3 h-3 ml-1" /></>
+                                      ) : (
+                                        <>Ver desglose de subcategorías <ChevronDown className="w-3 h-3 ml-1" /></>
+                                      )}
+                                    </Button>
                                   </div>
                                 )}
                               </div>
@@ -437,6 +472,79 @@ const Ejemplo = () => {
                             </div>
                           </div>
                         </div>
+
+                        {/* Subcategories Details */}
+                        {isExpanded && category.subcategories && (
+                          <div className="p-6 md:p-8 bg-muted/20 border-t border-border/50 animate-fade-in">
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-6 flex items-center gap-2">
+                              <TrendingUp className="w-4 h-4 text-primary" />
+                              Distribución Interna del Gasto
+                            </h4>
+                            <div className="grid md:grid-cols-2 gap-8 items-start">
+                              {/* Chart */}
+                              <div className="min-h-[250px] w-full flex flex-col justify-center bg-background/40 rounded-2xl p-4 border border-border/30">
+                                <ResponsiveContainer width="100%" height={220}>
+                                  <PieChart>
+                                    <Pie
+                                      data={category.subcategories}
+                                      cx="50%"
+                                      cy="50%"
+                                      innerRadius={60}
+                                      outerRadius={85}
+                                      paddingAngle={3}
+                                      dataKey="amount"
+                                      nameKey="name"
+                                      stroke="transparent"
+                                      cornerRadius={4}
+                                    >
+                                      {category.subcategories.map((entry, idx) => (
+                                        <Cell
+                                          key={`cell-${idx}`}
+                                          fill={COLORS[idx % COLORS.length]}
+                                        />
+                                      ))}
+                                    </Pie>
+                                    <RechartsTooltip
+                                      formatter={(value: number) => [formatCurrency(value), "Monto"]}
+                                      contentStyle={{
+                                        borderRadius: '12px',
+                                        border: '1px solid hsl(var(--border)/0.5)',
+                                        backgroundColor: 'hsl(var(--background)/0.95)',
+                                        backdropFilter: 'blur(4px)'
+                                      }}
+                                    />
+                                  </PieChart>
+                                </ResponsiveContainer>
+                              </div>
+
+                              {/* List */}
+                              <div className="space-y-2">
+                                {category.subcategories.map((sub, idx) => (
+                                  <div
+                                    key={idx}
+                                    className="flex justify-between items-center p-3 rounded-lg bg-card border border-border/40"
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <div
+                                        className="w-3 h-3 rounded-full flex-shrink-0"
+                                        style={{ backgroundColor: COLORS[idx % COLORS.length] }}
+                                      />
+                                      <div className="flex flex-col">
+                                        <span className="text-xs font-bold">{sub.name}</span>
+                                        {sub.type === "extraordinaria" && (
+                                          <Badge variant="outline" className="w-fit text-[8px] h-4 mt-0.5 bg-amber-100 text-amber-700 border-amber-200">
+                                            Extraordinaria
+                                          </Badge>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div className="text-xs font-bold">{formatCurrency(sub.amount)}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                   );

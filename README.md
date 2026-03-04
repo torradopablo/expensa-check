@@ -1,7 +1,17 @@
-# Supabase CLI
+# ExpensaCheck (v1.8.0) 🇦🇷
 
-[![Coverage Status](https://coveralls.io/repos/github/supabase/cli/badge.svg?branch=main)](https://coveralls.io/github/supabase/cli?branch=main) [![Bitbucket Pipelines](https://img.shields.io/bitbucket/pipelines/supabase-cli/setup-cli/master?style=flat-square&label=Bitbucket%20Canary)](https://bitbucket.org/supabase-cli/setup-cli/pipelines) [![Gitlab Pipeline Status](https://img.shields.io/gitlab/pipeline-status/sweatybridge%2Fsetup-cli?label=Gitlab%20Canary)
-](https://gitlab.com/sweatybridge/setup-cli/-/pipelines)
+Inteligencia Artificial para el análisis de expensas en Argentina. 
+
+Este proyecto ayuda a propietarios y administradores a entender sus expensas, detectar aumentos desmedidos y realizar un seguimiento inteligente de proveedores y gastos.
+
+## 🚀 Novedades de la versión 1.8.0
+- **Seguimiento de Proveedores**: Extracción automática de CUIT/CUIL para auditoría y comparativas.
+- **Preparación de Reunión Pro**: Generación de temarios con IA basados en datos numéricos concretos de subcategorías.
+- **Modo Lancamiento**: Landing de "Próximamente" controlable mediante feature flags (`VITE_COMING_SOON`).
+
+---
+
+# Supabase CLI
 
 [Supabase](https://supabase.io) is an open source Firebase alternative. We're building the features of Firebase using enterprise-grade open source tools.
 
