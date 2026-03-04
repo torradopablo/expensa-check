@@ -248,6 +248,8 @@ serve(async (req) => {
       status: "completed",
       scanned_at: new Date().toISOString(),
       building_profile_id: buildingProfileId,
+      administrator_name: extractedData.administrator_name || undefined,
+      administrator_cuit: extractedData.administrator_cuit || undefined,
     });
 
     if (updateError) {
@@ -290,6 +292,8 @@ serve(async (req) => {
                   amount: sub.amount,
                   percentage: sub.percentage || null,
                   expense_type: sub.expense_type || "ordinaria",
+                  provider_name: sub.provider_name || null,
+                  provider_cuit: sub.provider_cuit || null,
                 });
               });
             }
@@ -302,9 +306,69 @@ serve(async (req) => {
             console.error("Subcategories creation error:", subError);
           } else {
             console.log(`Successfully persisted ${subcategoriesToInsert.length} subcategories`);
+
+            // Save ALL subcategory data anonymously for the Savings Engine / crowdsourcing
+            // Even subcategories without an explicit provider are valuable for price benchmarking
+            const anonymizedPrices = subcategoriesToInsert.map(s => {
+              let categoryName = "Desconocida";
+              if (createdCategories) {
+                const cat = (createdCategories as any[]).find(c => c.id === s.category_id);
+                if (cat) categoryName = cat.name;
+              }
+
+              return {
+                provider_name: s.provider_name || s.name, // Subcategory name as fallback identifier
+                provider_cuit: s.provider_cuit || null,
+                provider_type: (s as any).provider_type || null,
+                cuit_confirmed: (s as any).cuit_confirmed === true,
+                category_name: categoryName,
+                subcategory_name: s.name,
+                amount: s.amount,
+                expense_type: s.expense_type,
+                period: extractedData.period,
+                period_month: extractedData.period_month || null,
+                period_year: extractedData.period_year || null,
+                building_zone: extractedData.building_profile?.zone || null,
+                building_unit_count: extractedData.building_profile?.unit_count_range || null,
+                city: extractedData.building_profile?.city || null,
+                neighborhood: extractedData.building_profile?.neighborhood || null,
+                province: extractedData.building_profile?.province || null,
+                raw_building_address: (extractedData as any).building_address || null,
+              };
+            });
+
+            if (anonymizedPrices.length > 0) {
+              await analysisRepository.createAnonymizedProviderPrices(anonymizedPrices).catch(e => {
+                console.error("Failed to insert anonymized provider prices (non-blocking):", e);
+              });
+              console.log(`Saved ${anonymizedPrices.length} anonymized price records for Savings Engine.`);
+            }
           }
         }
       }
+    }
+
+    // Save anonymized administrator data for crowdsourcing / Savings Engine
+    if (extractedData.administrator_name && extractedData.administrator_name.trim() !== '') {
+      await analysisRepository.createAnonymizedAdministratorData({
+        administrator_name: extractedData.administrator_name,
+        administrator_cuit: extractedData.administrator_cuit || null,
+        cuit_confirmed: extractedData.administrator_cuit_confirmed === true,
+        contact_phone: extractedData.administrator_contact_phone || null,
+        contact_email: extractedData.administrator_contact_email || null,
+        contact_address: extractedData.administrator_contact_address || null,
+        period: extractedData.period,
+        period_month: extractedData.period_month || null,
+        period_year: extractedData.period_year || null,
+        building_zone: extractedData.building_profile?.zone || null,
+        building_unit_count: extractedData.building_profile?.unit_count_range || null,
+        city: extractedData.building_profile?.city || null,
+        neighborhood: extractedData.building_profile?.neighborhood || null,
+        province: extractedData.building_profile?.province || null,
+        raw_building_address: (extractedData as any).building_address || null,
+      }).catch(e => {
+        console.error("Failed to insert anonymized administrator data (non-blocking):", e);
+      });
     }
 
     // Generate automated evolution analysis (async, but we wait for it to ensure it persists)

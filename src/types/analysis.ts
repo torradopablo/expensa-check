@@ -5,6 +5,8 @@ export interface Subcategory {
   amount: number;
   percentage?: number | null;
   expense_type: "ordinaria" | "extraordinaria" | "fondo_reserva";
+  provider_name?: string | null;
+  provider_cuit?: string | null;
 }
 
 export interface Category {
@@ -34,6 +36,8 @@ export interface Analysis {
   evolution_analysis?: string | null;
   deviation_stats?: any | null;
   building_profile_id?: string | null;
+  administrator_name?: string | null;
+  administrator_cuit?: string | null;
 }
 
 export interface EvolutionData {
