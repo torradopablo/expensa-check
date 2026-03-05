@@ -20,7 +20,7 @@ async function sendEmail({ to, subject, html, replyTo }: { to: string; subject: 
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      sender: { name: "ExpensaCheck", email: CONTACT_EMAIL },
+      sender: { name: "ExpensaCheck", email: "noreply@expensacheck.com.ar" },
       to: [{ email: to }],
       replyTo: replyTo ? { email: replyTo } : undefined,
       subject: subject,

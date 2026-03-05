@@ -14,26 +14,40 @@ export class ComparisonService {
   ): string | null {
     const extractedNormalized = this.normalizeForComparison(extractedName);
 
+    // Extract numbers to ensure they match (crucial for building addresses)
+    const getNumbers = (s: string) => s.match(/\d+/g)?.join("") || "";
+    const extractedNumbers = getNumbers(extractedNormalized);
+
     const matchingBuilding = existingNames.find(existingName => {
       const existingNormalized = this.normalizeForComparison(existingName);
+      const existingNumbers = getNumbers(existingNormalized);
+
+      // Rule 1: Numeric safety. If both have numbers and they differ, they are likely different buildings
+      // (e.g., "Rivadavia 100" vs "Rivadavia 200")
+      if (extractedNumbers && existingNumbers && extractedNumbers !== existingNumbers) {
+        return false;
+      }
 
       // Exact match after normalization
       if (extractedNormalized === existingNormalized) {
         return true;
       }
 
-      // One contains the other (handles abbreviations like "Edif." vs "Edificio")
+      // Rule 2: High overlap requirement
+      // Handles minor differences like "Edificio" vs "Edif."
       if (extractedNormalized.includes(existingNormalized) || existingNormalized.includes(extractedNormalized)) {
-        // Only match if substantial overlap (at least 60% of shorter string)
         const shorter = Math.min(extractedNormalized.length, existingNormalized.length);
         const longer = Math.max(extractedNormalized.length, existingNormalized.length);
-        if (shorter / longer > 0.5) {
+
+        // Increased threshold from 0.5 to 0.85 for "contains" matching
+        // to be much more selective and avoid matching different buildings in the same street
+        if (shorter / longer > 0.85) {
           return true;
         }
       }
 
-      // Levenshtein-like similarity for typos
-      if (Math.abs(extractedNormalized.length - existingNormalized.length) <= 2) {
+      // Rule 3: Levenshtein-like similarity for typos (very strict)
+      if (Math.abs(extractedNormalized.length - existingNormalized.length) <= 1) { // reduced from 2
         let differences = 0;
         const maxLen = Math.max(extractedNormalized.length, existingNormalized.length);
         for (let i = 0; i < maxLen; i++) {
@@ -41,7 +55,8 @@ export class ComparisonService {
             differences++;
           }
         }
-        if (differences <= 2 && maxLen > 5) {
+        // Allow only 1 difference for building names (more critical than general text)
+        if (differences <= 1 && maxLen > 8) {
           return true;
         }
       }
