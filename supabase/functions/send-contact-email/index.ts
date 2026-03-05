@@ -1,11 +1,39 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { Resend } from "https://esm.sh/resend@2.0.0";
 import { corsHeaders } from "../_shared/config/cors.ts";
 
-const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
-
-// IMPORTANT: The email that will receive the contact notifications
+// ========== CONFIGURATION ==========
 const CONTACT_EMAIL = Deno.env.get("CONTACT_EMAIL") || "soporte@expensacheck.com";
+const BREVO_API_KEY = Deno.env.get("BREVO_API_KEY");
+
+// ========== EMAIL HELPERS ==========
+async function sendEmail({ to, subject, html, replyTo }: { to: string; subject: string; html: string; replyTo?: string }) {
+  if (!BREVO_API_KEY) {
+    throw new Error("BREVO_API_KEY_MISSING: Set BREVO_API_KEY in Supabase secrets");
+  }
+
+  console.log(`[Email] Sending via Brevo to ${to}`);
+  const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      "accept": "application/json",
+      "api-key": BREVO_API_KEY,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      sender: { name: "ExpensaCheck", email: CONTACT_EMAIL },
+      to: [{ email: to }],
+      replyTo: replyTo ? { email: replyTo } : undefined,
+      subject: subject,
+      htmlContent: html,
+    }),
+  });
+
+  if (response.ok) return { success: true, provider: "brevo" };
+
+  const errorData = await response.json();
+  console.error(`[Email] Brevo failed:`, errorData);
+  throw new Error(`BREVO_FAILED: ${JSON.stringify(errorData)}`);
+}
 
 // ========== RATE LIMITING ==========
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
@@ -53,8 +81,102 @@ const subjectLabels: Record<string, string> = {
   sugerencia: "Sugerencia",
   reclamo: "Reclamo",
   datos_personales: "Solicitud sobre datos personales",
+  lanzamiento: "Interés en Lanzamiento",
   otro: "Otro",
 };
+
+// ========== EMAIL TEMPLATE ==========
+function getEmailTemplate({ title, body, actionText, actionUrl }: { title: string; body: string; actionText?: string; actionUrl?: string }) {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title}</title>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      background-color: #f8fafc;
+      margin: 0;
+      padding: 0;
+      color: #334155;
+    }
+    .container {
+      max-width: 600px;
+      margin: 40px auto;
+      background-color: #ffffff;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      border: 1px solid #e2e8f0;
+    }
+    .header {
+      background: linear-gradient(135deg, #10b981 0%, #3b82f6 100%);
+      padding: 30px;
+      text-align: center;
+    }
+    .logo-text {
+      color: white;
+      font-size: 24px;
+      font-weight: bold;
+      text-decoration: none;
+      letter-spacing: -0.5px;
+    }
+    .content {
+      padding: 40px 30px;
+      text-align: center;
+    }
+    h1 {
+      color: #0f172a;
+      font-size: 24px;
+      margin-bottom: 16px;
+      font-weight: 700;
+    }
+    p {
+      color: #475569;
+      font-size: 16px;
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+    .button {
+      display: inline-block;
+      background-color: #10b981;
+      color: #ffffff !important;
+      font-weight: 600;
+      padding: 14px 32px;
+      border-radius: 50px;
+      text-decoration: none;
+      margin-top: 10px;
+      margin-bottom: 10px;
+      box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.4);
+    }
+    .footer {
+      background-color: #f1f5f9;
+      padding: 20px;
+      text-align: center;
+      font-size: 12px;
+      color: #94a3b8;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo-text">ExpensaCheck</div>
+    </div>
+    <div class="content">
+      <h1>${title}</h1>
+      <p>${body}</p>
+      ${actionUrl ? `<a href="${actionUrl}" class="button">${actionText}</a>` : ""}
+    </div>
+    <div class="footer">
+      <p style="margin: 0;">&copy; 2026 ExpensaCheck. Todos los derechos reservados.</p>
+    </div>
+  </div>
+</body>
+</html>`;
+}
 
 const handler = async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
@@ -90,62 +212,56 @@ const handler = async (req: Request): Promise<Response> => {
     const safeEmail = escapeHtml(email);
     const safeMessage = escapeHtml(message);
 
-    console.log(`Contact request from ${safeEmail}`);
+    console.log(`Contact request from ${safeEmail} for ${subjectLabel}`);
 
-    if (!Deno.env.get("RESEND_API_KEY")) {
-      throw new Error("RESEND_API_KEY_MISSING");
-    }
-
-    // 1. Send notification to admin (Crucial)
-    // We use onboarding@resend.dev which works for trial accounts
-    // but ONLY if the TO address is the verified account email.
-    const adminResponse = await resend.emails.send({
-      from: "ExpensaCheck <onboarding@resend.dev>",
-      to: [CONTACT_EMAIL],
-      reply_to: email,
-      subject: `[Contacto] ${subjectLabel} - ${safeName}`,
-      html: `
-        <div style="font-family: sans-serif; padding: 20px;">
-          <h2>Nuevo mensaje de contacto</h2>
-          <p><strong>De:</strong> ${safeName} (${safeEmail})</p>
-          <p><strong>Asunto:</strong> ${subjectLabel}</p>
-          <hr/>
-          <p style="white-space: pre-wrap;">${safeMessage}</p>
-        </div>
-      `,
+    // 1. Send notification to admin
+    const adminHtml = getEmailTemplate({
+      title: "Nuevo mensaje de contacto",
+      body: `
+        <strong>De:</strong> ${safeName} (<a href="mailto:${safeEmail}">${safeEmail}</a>)<br/>
+        <strong>Asunto:</strong> ${subjectLabel}<br/>
+        <br/>
+        <strong>Mensaje:</strong><br/>
+        ${safeMessage.replace(/\n/g, "<br/>")}
+      `
     });
 
-    if (adminResponse.error) {
-      console.error("Admin email failed:", adminResponse.error);
-      // Detailed error for the user to see in the toast
-      const errorMsg = adminResponse.error.message;
-      let userDetails = errorMsg;
-      if (errorMsg.includes("verify your domain")) {
-        userDetails = "Resend requiere verificar el dominio o el destinatario (Trial mode).";
-      }
-      throw new Error(`ADMIN_DELIVERY_FAILED: ${userDetails}`);
-    }
+    await sendEmail({
+      to: CONTACT_EMAIL,
+      replyTo: email,
+      subject: `[ExpensaCheck] ${subjectLabel} - ${safeName}`,
+      html: adminHtml,
+    });
 
-    // 2. Send confirmation to user (Optional/Supportive)
-    // This will LIKELY FAIL in Trial mode if 'email' is not verified.
-    // We don't want to fail the whole request because of this.
+    // 2. Send confirmation to user
     try {
-      const userResponse = await resend.emails.send({
-        from: "ExpensaCheck <onboarding@resend.dev>",
-        to: [email],
-        subject: "Recibimos tu mensaje - ExpensaCheck",
-        html: `
-          <div style="font-family: sans-serif; padding: 20px;">
-            <h3>¡Hola ${safeName}!</h3>
-            <p>Gracias por contactarnos. Te responderemos a la brevedad.</p>
-          </div>
-        `,
-      });
-      if (userResponse.error) {
-        console.warn("User confirmation failed (expected in trial mode):", userResponse.error);
+      let userTitle = "¡Recibimos tu mensaje!";
+      let userBody = `Hola ${safeName}, gracias por contactarnos. Hemos recibido tu consulta sobre <strong>${subjectLabel}</strong> y te responderemos a la brevedad.`;
+      let actionText = undefined;
+      let actionUrl = undefined;
+
+      // Specialized content for waitlist signups
+      if (subject === "lanzamiento") {
+        userTitle = "¡Bienvenido a ExpensaCheck!";
+        userBody = `¡Gracias por tu interés en sumarte a nuestra revolución! Te anotamos en la lista de espera para el lanzamiento oficial. Te avisaremos por este medio apenas estemos listos para que comiences a optimizar tus expensas.`;
+        actionText = "Ver Novedades";
+        actionUrl = "https://expensacheck.com.ar"; // Change to actual blog/social if exists
       }
-    } catch (confError) {
-      console.warn("User confirmation exception:", confError);
+
+      const userHtml = getEmailTemplate({
+        title: userTitle,
+        body: userBody,
+        actionText,
+        actionUrl
+      });
+
+      await sendEmail({
+        to: email,
+        subject: subject === "lanzamiento" ? "¡Ya estás en la lista de espera! - ExpensaCheck" : "Recibimos tu mensaje - ExpensaCheck",
+        html: userHtml,
+      });
+    } catch (confError: any) {
+      console.warn("[Email] User confirmation failed:", confError.message);
     }
 
     return new Response(JSON.stringify({ success: true }), {
@@ -154,10 +270,10 @@ const handler = async (req: Request): Promise<Response> => {
     });
 
   } catch (error: any) {
-    console.error("Function error:", error);
+    console.error("[Email] Function error:", error);
     return new Response(
       JSON.stringify({
-        error: "Error en el servicio de contacto",
+        error: "Error en el servicio de correo",
         details: error.message
       }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
