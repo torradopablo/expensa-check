@@ -38,7 +38,18 @@ import {
   ChevronDown,
   ChevronUp,
   ShieldAlert,
-  CreditCard
+  CreditCard,
+  Sparkles,
+  Flame,
+  Briefcase,
+  ShieldCheck,
+  PiggyBank,
+  ArrowUpDown,
+  Eye,
+  Leaf,
+  Hammer,
+  Wifi,
+  Package,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -56,7 +67,6 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Sparkles } from "lucide-react";
 import { formatPeriod, periodToYearMonth } from "@/services/formatters/date";
 import { AnomalyAlerts } from "@/components/AnomalyAlerts";
 import { HistoricalEvolutionChart } from "@/components/HistoricalEvolutionChart";
@@ -64,8 +74,25 @@ import { EvolutionComparisonChart } from "@/components/EvolutionComparisonChart"
 import { ComparisonChart } from "@/components/ComparisonChart";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip as RechartsTooltip } from 'recharts';
 
-
+// Icon map: includes both new Spanish keys (vocabulary-controlled) and legacy English keys
+// for backward compatibility with already-stored analyses.
 const iconMap: Record<string, any> = {
+  // ─── New vocabulary-controlled keys (Spanish) ───
+  personal: Users,
+  mantenimiento: Wrench,
+  gas: Flame,
+  electricidad: Zap,
+  agua: Droplets,
+  administracion: Briefcase,
+  seguros: ShieldCheck,
+  fondo_reserva: PiggyBank,
+  ascensores: ArrowUpDown,
+  seguridad: Eye,
+  jardineria: Leaf,
+  obras: Hammer,
+  comunicaciones: Wifi,
+  otros: Package,
+  // ─── Legacy English keys (keep for stored data) ───
   users: Users,
   zap: Zap,
   droplets: Droplets,
