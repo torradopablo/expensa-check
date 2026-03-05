@@ -1,76 +1,90 @@
 import { resolvePDFJS } from "https://esm.sh/pdfjs-serverless@0.4.2";
 
 export class PDFService {
-    /**
-     * Extracts text from a PDF file
-     * @param arrayBuffer The PDF file as an ArrayBuffer
-     * @returns The extracted text
-     */
     async extractText(arrayBuffer: ArrayBuffer): Promise<string> {
         try {
             const data = new Uint8Array(arrayBuffer);
             const { getDocument } = await resolvePDFJS();
-            const doc = await getDocument({ data, useSystemFonts: true }).promise;
+            
+            // Agregamos verbosity: 0 para evitar logs innecesarios en Supabase
+            const doc = await getDocument({ 
+                data, 
+                useSystemFonts: true,
+                verbosity: 0 
+            }).promise;
 
             const allText: string[] = [];
+            
             for (let i = 1; i <= doc.numPages; i++) {
                 const page = await doc.getPage(i);
                 const textContent = await page.getTextContent();
-                // transform[5] is the Y coordinate (from bottom), transform[4] is the X.
                 const items = textContent.items as any[];
 
-                // Group items by their Y coordinate (vertical position) with a small threshold
+                if (items.length === 0) {
+                    allText.push(`[Página ${i}: No se detectó texto. ¿Es un escaneo o imagen?]`);
+                    continue;
+                }
+
+                // Agrupar por coordenada Y con un umbral dinámico (2pt suele ser ideal para tablas)
                 const lineBuckets = new Map<number, any[]>();
                 for (const item of items) {
-                    if (!item.str || item.str.trim() === "") continue; // Skip empty items
-
-                    const y = Math.round(item.transform[5] / 3) * 3; // 3pt tolerance for lines
+                    if (!item.str || item.str.trim() === "") continue;
+                    
+                    // Usamos un umbral de 2 para mayor precisión en tablas apretadas
+                    const y = Math.round(item.transform[5] / 2) * 2; 
                     if (!lineBuckets.has(y)) lineBuckets.set(y, []);
                     lineBuckets.get(y)!.push(item);
                 }
 
-                // Sort Y buckets top to bottom
                 const sortedY = Array.from(lineBuckets.keys()).sort((a, b) => b - a);
-
                 let pageContent = "";
-                const CHAR_WIDTH = 4.5; // Aproximación de ancho de carácter para simular grilla (595pts / 4.5 = ~132 cols)
 
                 for (const y of sortedY) {
                     const lineItems = lineBuckets.get(y)!.sort((a, b) => a.transform[4] - b.transform[4]);
-
                     let lineStr = "";
-                    let lastEndChar = 0;
+                    let lastX = 0;
+                    let lastWidth = 0;
 
                     for (const item of lineItems) {
                         const x = item.transform[4];
-                        const targetCharPos = Math.max(0, Math.floor(x / CHAR_WIDTH));
-
-                        const spacesToInsert = targetCharPos - lastEndChar;
-
-                        if (spacesToInsert > 0) {
-                            // Insertar espacios para llegar a la columna correcta
-                            lineStr += " ".repeat(spacesToInsert);
-                        } else if (spacesToInsert < 0 && lineStr.length > 0 && !lineStr.endsWith(" ")) {
-                            // Si se superpone y no hay espacio previo, asegurar al menos 1 espacio para separar palabras
-                            lineStr += " ";
+                        const text = item.str.replace(/[\u200B-\u200D\uFEFF]/g, '');
+                        
+                        // Lógica de espaciado mejorada:
+                        // Si la distancia entre el final del anterior y el inicio del actual
+                        // es mayor a la mitad del ancho del carácter actual, insertamos espacio.
+                        if (lastX !== 0) {
+                            const gap = x - (lastX + lastWidth);
+                            if (gap > 2) { // 2 puntos de espacio mínimo para considerar separación
+                                // Intentamos simular columnas basándonos en el gap
+                                const spaces = Math.min(Math.max(1, Math.floor(gap / 4)), 15);
+                                lineStr += " ".repeat(spaces);
+                            }
+                        } else {
+                            // Indentación inicial si la línea no empieza en el margen izquierdo (x > 50)
+                            if (x > 50) {
+                                lineStr += " ".repeat(Math.floor(x / 8));
+                            }
                         }
 
-                        // Reemplazar caracteres invisibles
-                        const text = item.str.replace(/[\u200B-\u200D\uFEFF]/g, '');
                         lineStr += text;
-                        lastEndChar = lineStr.length;
+                        lastX = x;
+                        lastWidth = item.width || (text.length * 5); // Fallback si no hay width
                     }
-
                     pageContent += lineStr.trimEnd() + "\n";
                 }
-
                 allText.push(pageContent);
             }
 
-            return allText.join("\n\n--- PÁGINA ---\n\n");
+            const result = allText.join("\n\n--- PÁGINA ---\n\n");
+            
+            if (result.trim().length === 0) {
+                throw new Error("El PDF parece estar vacío o ser una imagen sin capa de texto.");
+            }
+
+            return result;
         } catch (error) {
-            console.error("Error extracting text from PDF:", error);
-            throw new Error(`Error al extraer texto del PDF: ${error instanceof Error ? error.message : "Error desconocido"}`);
+            console.error("Error en PDFService:", error);
+            throw error;
         }
     }
 }

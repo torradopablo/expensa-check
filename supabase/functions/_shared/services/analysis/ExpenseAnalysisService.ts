@@ -52,18 +52,37 @@ export class ExpenseAnalysisService {
       truncatedText = text.substring(0, 40000) + "\n...[CONTENIDO OMITIDO EN EL MEDIO PARA OPTIMIZAR]...\n" + text.substring(text.length - 40000);
     }
 
-    const prompt = `Analizá esta liquidación de expensas (texto extraído por OCR). 
-Tarea: Limpia errores de lectura, identifica montos (puntos/comas) y extrae los datos JSON.
+    const prompt = `Analizá esta liquidación de expensas argentina (texto extraído por OCR de un PDF con estructura tabular).
+
+INSTRUCCIÓN PRINCIPAL:
+- Limpiá errores de OCR, identificá correctamente los montos y extraé los datos en formato JSON exacto.
+- Recordá que en Argentina los PUNTOS separan miles y las COMAS separan decimales (el punto NO es decimal).
+  Ejemplos: "1.500.000" = un millón quinientos mil / "14.500,50" = catorce mil quinientos con cincuenta centavos.
+
+ESTRUCTURA DEL TEXTO:
+- El texto conserva la alineación espacial de columnas del PDF original.
+- Largos bloques de espacios en blanco representan saltos reales de columna.
+- Los totales del consorcio y el resumen suelen aparecer al FINAL del texto (última página del PDF).
+- La columna de la DERECHA suele contener el importe; la de la IZQUIERDA, el concepto.
+- Si un concepto ocupa 2 o más líneas, el monto está en la primera o última línea (no en las del medio).
+
+MAPEO DE COLUMNAS A SEGUIR:
+1. Columna de concepto / proveedor  →  "name" y "provider_name" de la subcategoría.
+2. Columna de gasto / erogación del mes  →  "amount" de la subcategoría.
+3. Ignorá columnas de "Saldo anterior", "Intereses", "Deuda acumulada".
+
+REGLAS DE SALIDA:
+1. Devolvé ÚNICAMENTE el código JSON (sin texto previo ni posterior).
+2. Sé conciso en el campo "explanation" de cada categoría para ahorrar espacio.
+3. Asegurate de que el JSON esté completo y cierre correctamente.
+4. Cada línea de gasto → una subcategoría individual (no agrupes).
+5. Si una categoría no tiene líneas de gasto visibles, generá el objeto de categoría con "subcategories": [].
 
 TEXTO:
 """
 ${truncatedText}
 """
-
-REGLAS DE SALIDA:
-1. Devuelve ÚNICAMENTE el código JSON.
-2. Sé conciso en el campo "explanation" de cada categoría para ahorrar espacio.
-3. Asegurate de que el JSON esté completo y cierre correctamente.`;
+`;
 
     const content = await this.aiService.generateContent(
       prompt,
@@ -219,6 +238,18 @@ REGLAS DE SALIDA:
     return `Eres un experto en liquidaciones de expensas argentinas. Devuelve ÚNICAMENTE JSON plano sin texto adicional.
 ${buildingGuide}${categoriesGuide}
 ═══════════════════════════════════════════════════════════════
+REGLA 0 — SEPARADORES NUMÉRICOS ARGENTINOS (BASE)
+═══════════════════════════════════════════════════════════════
+En Argentina (a diferencia de EEUU/UK) los números usan:
+  • PUNTO (.) como separador de MILES → "1.500.000" = un millón quinientos mil
+  • COMA (,) como separador de DECIMALES → "14.500,50" = catorce mil quinientos con cincuenta centavos
+Ejemplos críticos:
+  "1.500.000"  →  number: 1500000  (NO 1.5)
+  "127.350,40" →  number: 127350.40
+  "50.000"     →  number: 50000
+Al convertir a JSON usa SIEMPRE número sin formato (sin puntos ni comas).
+
+═══════════════════════════════════════════════════════════════
 REGLA 1 — TOTAL DEL CONSORCIO vs TOTAL POR UNIDAD (CRÍTICO)
 ═══════════════════════════════════════════════════════════════
 Las expensas argentinas muestran DOS totales distintos:
@@ -230,12 +261,13 @@ REGLA DE ORO: Debes extraer el TOTAL DEL CONSORCIO (no el de la unidad).
   - Las categorías (Personal, Mantenimiento, etc.) también deben ser del consorcio.
   - El campo "unit" es el número de unidad funcional (ej: "3B") si aparece.
   - NUNCA reportes el importe por unidad como total_amount.
-  ✓ CORRECTO: total_amount = 14.500.000 (aunque la expensa de la unidad sea $127.000)
-  ✗ INCORRECTO: total_amount = 127.000
+  ✓ CORRECTO: total_amount = 14500000 (aunque la expensa de la unidad sea 127000)
+  ✗ INCORRECTO: total_amount = 127000
 
- Para identificar cuál es cuál:
+Para identificar cuál es cuál:
   - El total del consorcio suele estar en la página de detalle general, en mayúsculas: "TOTAL GENERAL", "TOTAL CONSORCIO"
   - El total por unidad suele decir: "Total a pagar", "Importe", "Deuda", "Su expensa", y es proporcional al coeficiente de la unidad
+  - En PDFs MULTIPÁGINA: los totales del consorcio casi siempre están en la ÚLTIMA página. No te detengas en la página 1.
 
 ═══════════════════════════════════════════════════════════════
 REGLA 2 — ALINEACIÓN HORIZONTAL Y TABLAS (ESTRUCTURAL)
@@ -273,13 +305,18 @@ REGLA 6 — IDENTIFICACIÓN DEL EDIFICIO vs ADMINISTRACIÓN
 ═══════════════════════════════════════════════════════════════
 - El building_name es el CONSORCIO (ej: "CONSORCIO PUEYRREDON 1234").
 - EXCLUYE nombres de "Estudios", "Administradoras" o "Liquidadores" de este campo.
+- SE MUY ESPECÍFICO: incluí siempre la numeración exacta de la calle si aparece.
+- PREVALENCIA: Si el documento muestra un edificio con un número diferente a los de la "GUÍA DE EDIFICIOS EXISTENTES", NO intentes forzar el nombre de la guía. Reportá el del documento como un edificio nuevo. Es preferible tener dos edificios separados que agruparlos por error.
+- NUNCA uses nombres genéricos como "Edificio", "Consorcio" o "CABA" si hay un nombre más específico disponible.
 
 ═══════════════════════════════════════════════════════════════
 REGLA 7 — EXTRACCIÓN LÍNEA POR LÍNEA (SIN EXCEPCIONES)
 ═══════════════════════════════════════════════════════════════
 - CADA ÚNICA línea de gasto en el PDF DEBE ser una subcategoría independiente.
-- ESTÁ PROHIBIDO AGRUPAR. Si hay 5 facturas de mantenimiento, reporta 5 subcategorías. 
+- ESTÁ PROHIBIDO AGRUPAR. Si hay 5 facturas de mantenimiento, reporta 5 subcategorías.
 - Copia el nombre del proveedor o concepto exactamente como aparece.
+- Si una sección del PDF no tiene líneas de gasto detalladas (solo un total de categoría sin desgrlosar),
+  incluí la categoría de todas formas con "subcategories": [] — NUNCA omitas la categoría.
 
 ═══════════════════════════════════════════════════════════════
 REGLA 8 — DETECCIÓN DE GASTOS EXTRAORDINARIOS
@@ -288,38 +325,80 @@ REGLA 8 — DETECCIÓN DE GASTOS EXTRAORDINARIOS
 - Úsalo también para arreglos grandes (ej: reparación de caldera, pintura de fachada).
 
 ═══════════════════════════════════════════════════════════════
-REGLA 9 — INSIGHTS Y ALERTAS PARA EL USUARIO
+REGLA 9 — STATUS DE CATEGORÍAS (CRITERIOS PRECISOS)
+═══════════════════════════════════════════════════════════════
+Usa EXACTAMENTE uno de estos tres valores para el campo "status":
+  • "ok"         → La categoría no presenta anomalías. Gastos dentro de lo esperable.
+  • "attention"  → Detectás al menos UNO de los siguientes:
+                    - Multas, intereses por mora, cargos por falta de pago.
+                    - Gastos extraordinarios (obras, juicios, indemnizaciones).
+                    - Montos llamativamente altos sin justificación aparente.
+                    - Errores o inconsistencias en los datos del documento.
+  • "info"       → Información relevante pero neutral (ej: fondos de reserva, gastos de administración
+                    que son normales pero vale destacar).
+REGLA: Si dudás entre "ok" y "attention", usá "attention". NO uses "attention" por defecto en categorías normales.
+
+═══════════════════════════════════════════════════════════════
+REGLA 10 — INSIGHTS Y ALERTAS PARA EL USUARIO
 ═══════════════════════════════════════════════════════════════
 - Si detectas algo inusual (sobreprecio, multas, intereses por mora en servicios públicos), explícalo en "explanation".
 - Empatiza con el usuario: "Atención: se pagó una multa por falta de matafuegos."
 - Cambia el status de la categoría a "attention".
 
 ═══════════════════════════════════════════════════════════════
-REGLA 10 — VERIFICACIÓN MATEMÁTICA (AUTOCORRECCIÓN)
+REGLA 11 — VERIFICACIÓN MATEMÁTICA (AUTOCORRECCIÓN)
 ═══════════════════════════════════════════════════════════════
 - El "current_amount" de cada categoría DEBE ser la suma EXACTA de todas sus subcategorías.
 - Si no coinciden, es una señal de que omitiste extraer líneas del PDF. Revisalo antes de responder.
+
+═══════════════════════════════════════════════════════════════
+REGLA 12 — FORMATO DEL CAMPO "period" (OBLIGATORIO)
+═══════════════════════════════════════════════════════════════
+El campo "period" SIEMPRE debe seguir el formato: "Mes YYYY" con el mes en español con inicial mayúscula.
+Ejemplos válidos:  "Enero 2025"  |  "Febrero 2025"  |  "Octubre 2024"
+Formatos PROHIBIDOS: "01/2025", "2025-01", "enero 2025", "ENERO 2025", "Ene 2025"
+Usa siempre el nombre completo del mes. Los campos period_month y period_year son numéricos.
+
+═══════════════════════════════════════════════════════════════
+REGLA 13 — ÍCONOS VÁLIDOS (VOCABULARIO CONTROLADO)
+═══════════════════════════════════════════════════════════════
+El campo "icon" de cada categoría SOLO puede contener UNO de los siguientes valores exactos:
+  personal          → Sueldos, honorarios, cargas sociales, portería
+  mantenimiento     → Reparaciones, conservación, limpieza, fumigación
+  gas               → Servicios de gas (Metrogas, Naturgy, etc.)
+  electricidad      → Servicios eléctricos (Edesur, Edenor, etc.)
+  agua              → AySA, agua potable
+  administracion    → Honorarios de administración, gastos de gestión
+  seguros           → Pólizas de seguro, ART
+  fondo_reserva     → Fondos de reserva, fondo de contingencia
+  ascensores        → Contrato y mantenimiento de ascensores
+  seguridad         → Vigilancia, monitoreo, alarmas
+  jardineria        → Jardín, plantas, espacios verdes
+  obras             → Obras, mejoras, refacciones extraordinarias
+  comunicaciones    → Internet, telefonía, portería virtual
+  otros             → Todo lo que no encaje en las categorías anteriores
+NUNCA inventes un ícono fuera de esta lista.
 
 
 JSON Schema a devolver:
 {
   "building_name": string,
   "building_address": string | null,
-  "period": string,
-  "period_month": number (1-12),
-  "period_year": number (YYYY),
+  "period": string,         // OBLIGATORIO: formato "Mes YYYY" (ej: "Marzo 2025")
+  "period_month": number,   // 1-12
+  "period_year": number,    // YYYY
   "unit": string | null,
   "unit_amount": number | null,
   "unit_coefficient": number | null,
-  "total_amount": number,
+  "total_amount": number,   // Total del CONSORCIO, nunca el de la unidad
   "categories": [
     {
       "name": string,
-      "icon": string,
+      "icon": string,        // OBLIGATORIO: solo valores de la lista de la REGLA 13
       "current_amount": number,
-      "status": "ok" | "attention" | "info",
+      "status": "ok" | "attention" | "info",  // Según criterios de REGLA 9
       "explanation": string | null,
-      "subcategories": [
+      "subcategories": [    // [] si no hay líneas detalladas; nunca omitir la categoría
         {
           "name": string,
           "amount": number,
@@ -355,19 +434,25 @@ JSON Schema a devolver:
 ═══════════════════════════════════════════════════════════════
 FEW-SHOT EXAMPLES (APRENDER DEL PATRÓN):
 ═══════════════════════════════════════════════════════════════
-Ejemplo 1 (Tabla con columnas): 
-"Consorcio Calle Falsa 123   Página 1   TOTAL: $1.000.000
-Unidad: 45   Coef: 0.015   Monto: $15.000"
--> JSON: {"total_amount": 1000000, "unit": "45", "unit_coefficient": 0.015, "unit_amount": 15000, ...}
+Ejemplo 1 (Tabla con columnas):
+Entrada: "Consorcio Calle Falsa 123   Página 1   TOTAL: $1.000.000 / Unidad: 45   Coef: 0.015   Monto: $15.000"
+Salida:  {"total_amount": 1000000, "unit": "45", "unit_coefficient": 0.015, "unit_amount": 15000, "period": "Enero 2025", ...}
 
-Ejemplo 2 (Triple espacio como separador):
-"Abono Ascensores ABC S.A.   $50.000   ordinaria
-Mantenimiento Portón   $10.000   ordinaria"
--> JSON: {"categories": [{"name": "Mantenimiento", "subcategories": [{"name": "Abono Ascensores ABC S.A.", "amount": 50000}, {"name": "Mantenimiento Portón", "amount": 10000}]}]}
+Ejemplo 2 (Triple espacio como separador de columna):
+Entrada: "Abono Ascensores ABC S.A.   $50.000\nMantenimiento Portón   $10.000"
+Salida:  {"categories": [{"name": "Mantenimiento", "icon": "mantenimiento", "status": "ok", "subcategories": [{"name": "Abono Ascensores ABC S.A.", "amount": 50000}, {"name": "Mantenimiento Portón", "amount": 10000}]}]}
+
+Ejemplo 3 (Separadores numéricos argentinos):
+Entrada: "TOTAL CONSORCIO: $1.487.320,00"
+Salida:  {"total_amount": 1487320}
+
+Ejemplo 4 (Categoría sin líneas detalladas):
+Entrada: "FONDO DE RESERVA   $45.000" (sin detalle de ítems)
+Salida:  {"name": "Fondo de Reserva", "icon": "fondo_reserva", "status": "info", "current_amount": 45000, "subcategories": []}
 `;
   }
 
   private getAnalysisPrompt(isPDF: boolean): string {
-    return "Analizá esta liquidación de expensas y extraé los datos estructurados en JSON. ADVERTENCIA: No confundas el nombre de la ADMINISTRACIÓN (ej: quien liquida) con el nombre del CONSORCIO/EDIFICIO (ej: la dirección o nombre del inmueble). Es CRÍTICO extraer el nombre correcto para el historial del usuario:";
+    return "Analizá esta liquidación de expensas y extraé los datos estructurados en JSON. ADVERTENCIA: No confundas el nombre de la ADMINISTRACIÓN (ej: quien liquida) con el nombre del CONSORCIO (ej: el inmueble). Es CRÍTICO extraer el nombre EXACTO con su numeración de calle para no mezclar edificios distintos en el historial del usuario.";
   }
 }
