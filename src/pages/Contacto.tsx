@@ -104,14 +104,10 @@ const Contacto = () => {
 
       const errorStr = error.message || "";
 
-      if (errorStr.includes("RESEND_API_KEY_MISSING")) {
-        errorMessage = "Configuración incompleta: Falta la clave RESEND_API_KEY en Supabase.";
-      } else if (errorStr.includes("ADMIN_DELIVERY_FAILED")) {
-        if (errorStr.includes("verify your domain") || errorStr.includes("Trial mode")) {
-          errorMessage = "Restricción de Resend: El destinatario no está verificado en tu cuenta gratuita.";
-        } else {
-          errorMessage = "Error de entrega: " + (errorStr.split("ADMIN_DELIVERY_FAILED: ")[1] || "Error en el servidor de correo.");
-        }
+      if (errorStr.includes("BREVO_API_KEY_MISSING")) {
+        errorMessage = "Configuración incompleta: Falta la clave BREVO_API_KEY en Supabase.";
+      } else if (errorStr.includes("BREVO_FAILED")) {
+        errorMessage = "Error de entrega con Brevo. Revisá la configuración API.";
       }
 
       toast.error(errorMessage, {

@@ -2,6 +2,15 @@
 
 This file contains implementation considerations and strategies for each project release.
 
+## [1.9.0] - 2026-03-04
+
+### Deployment Strategy & Considerations
+1. **Environment Variables**:
+   - Set `BREVO_API_KEY` in Supabase Secrets.
+   - `RESEND_API_KEY` can be safely removed from Supabase Secrets.
+2. **Edge Functions**: Redeploy `send-contact-email`.
+3. **Verification**: Confirm that the "Coming Soon" signup still works as expected with the new HTML confirmation email.
+
 ## [1.8.0] - 2026-03-04
 
 ### Deployment Strategy & Considerations
@@ -9,9 +18,9 @@ This file contains implementation considerations and strategies for each project
 
 1. **Environment Variables**:
    - Set `VITE_COMING_SOON=true` in production to show the landing page. Change to `false` when ready to go live.
-   - Ensure `CONTACT_EMAIL` and `RESEND_API_KEY` are configured in Supabase Secrets for the waitlist notifications.
-2. **Edge Functions**: Redeploy `prepare-meeting` and `send-contact-email`. `prepare-meeting` now uses the shared `MeetingPrepService` which includes the new AI prompt for more concrete numerical analysis and sub-category awareness. `send-contact-email` is now used for the waitlist on the "Coming Soon" page.
-3. **Frontend**: Deploy the web application. Verify that `Proximamente.tsx` loads when the flag is enabled and that the email signup works (triggers the function).
+   - Ensure `CONTACT_EMAIL` is configured in Supabase Secrets.
+2. **Edge Functions**: Redeploy `prepare-meeting`. It now uses the shared `MeetingPrepService` which includes the new AI prompt for more concrete numerical analysis and sub-category awareness.
+3. **Frontend**: Deploy the web application. Verify that `Proximamente.tsx` loads when the flag is enabled.
 
 ## [1.7.0] - 2026-02-22
 
