@@ -160,6 +160,9 @@ const CompararPage = () => {
 
   useEffect(() => {
     const fetchAnalyses = async () => {
+      setIsLoading(true);
+      setAnalyses([]);
+
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         navigate("/auth");
@@ -203,6 +206,11 @@ const CompararPage = () => {
       }
 
       setLoadingDetails(true);
+      setLeftAnalysis(null);
+      setRightAnalysis(null);
+      setLeftCategories([]);
+      setRightCategories([]);
+
       try {
         const [leftData, rightData] = await Promise.all([
           supabase.from("expense_analyses").select("*").eq("id", leftId).single(),

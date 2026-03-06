@@ -41,3 +41,6 @@ verify_jwt = false
 
 [functions.delete-account]
 verify_jwt = false
+
+[functions.get-savings-opportunities]
+verify_jwt = false

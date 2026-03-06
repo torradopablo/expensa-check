@@ -33,6 +33,7 @@ import {
   Clock,
   Globe,
   Brain,
+  PiggyBank,
   HelpCircle
 } from "lucide-react";
 import {
@@ -305,6 +306,7 @@ const Ejemplo = () => {
                 { label: "Análisis", icon: FileSearch, active: true },
                 { label: "Evolución", icon: Clock, active: true },
                 { label: "Comparativa", icon: Globe, active: true },
+                { label: "Ahorro", icon: PiggyBank, active: true },
                 { label: "Reunión", icon: LayoutList, active: true },
               ].map((step, i) => (
                 <div key={i} className="flex flex-col items-center gap-2">
