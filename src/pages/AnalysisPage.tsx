@@ -32,6 +32,7 @@ import {
   Copy,
   Check,
   Loader2,
+  Globe,
   User,
   MessageSquare,
   Send,
@@ -45,6 +46,7 @@ import {
   ShieldCheck,
   PiggyBank,
   ArrowUpDown,
+  ArrowRight,
   Eye,
   Leaf,
   Hammer,
@@ -103,7 +105,7 @@ const iconMap: Record<string, any> = {
 
 import { Logo } from "@/components/layout/ui/logo";
 
-const Header = () => {
+const Header = ({ id }: { id?: string }) => {
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -123,6 +125,17 @@ const Header = () => {
             <Link to="/historial">
               <History className="w-4 h-4 mr-2" />
               Ver historial
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="sm" className="hidden sm:flex">
+            <Link to={id ? `/ahorro/${id}` : "/ahorro"}>
+              <PiggyBank className="w-4 h-4 mr-2" />
+              Ahorro
+            </Link>
+          </Button>
+          <Button asChild variant="ghost" size="icon" className="sm:hidden">
+            <Link to={id ? `/ahorro/${id}` : "/ahorro"}>
+              <PiggyBank className="w-4 h-4" />
             </Link>
           </Button>
           <Button asChild variant="ghost" size="icon" className="sm:hidden">
@@ -193,6 +206,8 @@ interface Analysis {
   created_at: string;
   scanned_at: string | null;
   notes: string | null;
+  has_savings_opportunities?: boolean | null;
+  building_profiles?: any;
 }
 
 interface HistoricalDataPoint {
@@ -283,10 +298,42 @@ const AnalysisPage = () => {
   const [buildingsTrendRaw, setBuildingsTrendRaw] = useState<any[]>([]);
   const [isBuildingsTrendLoading, setIsBuildingsTrendLoading] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [hasSavingsOpportunities, setHasSavingsOpportunities] = useState(false);
+
+  useEffect(() => {
+    const checkSavings = async () => {
+      if (!id || hasSavingsOpportunities !== false) return; // Skip if already determined
+      try {
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        if (!currentSession) return;
+
+        const { data: response } = await supabase.functions.invoke("get-savings-opportunities", {
+          body: { analysisId: id }
+        });
+        if (response?.success && response?.data?.length > 0) {
+          setHasSavingsOpportunities(true);
+        }
+      } catch (err) {
+        console.error("Error checking savings:", err);
+      }
+    };
+    if (id) checkSavings();
+  }, [id, hasSavingsOpportunities]);
 
   useEffect(() => {
     const fetchAnalysis = async () => {
       if (!id) return;
+
+      setIsLoading(true);
+      setAnalysis(null);
+      setCategories([]);
+      setHistoricalData([]);
+      setEvolutionData([]);
+      setDeviation(null);
+      setBuildingsTrendStats(null);
+      setComments([]);
+      setSharedLink(null);
+      setSharedToken(null);
 
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
@@ -306,6 +353,11 @@ const AnalysisPage = () => {
 
         if (analysisError) throw analysisError;
         setAnalysis(analysisData);
+
+        // If high-level check was already done, sync state
+        if (analysisData.has_savings_opportunities !== null) {
+          setHasSavingsOpportunities(analysisData.has_savings_opportunities);
+        }
 
         // Fetch categories
         const { data: categoriesData, error: categoriesError } = await supabase
@@ -630,7 +682,7 @@ const AnalysisPage = () => {
           <div className="absolute bottom-[20%] right-[10%] w-[40%] h-[40%] bg-secondary/5 blur-[120px] rounded-full"></div>
         </div>
 
-        <Header />
+        <Header id={id} />
         <main className="pt-32 pb-20 relative z-10">
           <div className="container max-w-4xl">
             <Skeleton className="h-[400px] w-full mb-12 rounded-[2rem]" />
@@ -977,7 +1029,7 @@ Analizá tu expensa en ExpensaCheck`;
   return (
     <TooltipProvider delayDuration={200}>
       <div className="min-h-screen bg-gradient-soft">
-        <Header />
+        <Header id={id} />
         <main className="pt-32 pb-20">
           <div className="container max-w-4xl">
             <div className="flex items-center justify-between mb-8">
@@ -1090,6 +1142,37 @@ Analizá tu expensa en ExpensaCheck`;
                 </div>
               </CardContent>
             </Card>
+
+            {/* Savings Opportunity Teaser */}
+            {hasSavingsOpportunities && (
+              <Card variant="glass" className="mb-8 animate-bounce-subtle border-status-ok/30 bg-status-ok/5 overflow-hidden group hover:shadow-xl hover:shadow-status-ok/10 transition-all duration-500 cursor-pointer" onClick={() => navigate(`/ahorro/${id}`)}>
+                <CardContent className="p-0">
+                  <div className="flex items-center gap-6 p-6">
+                    <div className="w-14 h-14 rounded-2xl bg-status-ok/10 flex items-center justify-center flex-shrink-0 border border-status-ok/20 group-hover:scale-110 transition-transform duration-500">
+                      <PiggyBank className="w-8 h-8 text-status-ok" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-lg font-bold text-status-ok mb-1 flex items-center gap-2">
+                        Oportunidad de ahorro detectada
+                        <span className="relative flex h-3 w-3">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-status-ok opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-3 w-3 bg-status-ok"></span>
+                        </span>
+                      </h3>
+                      <p className="text-sm text-muted-foreground font-medium">
+                        Analizamos tus proveedores y encontramos opciones más económicas en tu zona.
+                      </p>
+                    </div>
+                    <Button variant="ghost" size="icon" className="text-status-ok group-hover:translate-x-2 transition-transform">
+                      <ArrowRight className="w-6 h-6" />
+                    </Button>
+                  </div>
+                  <div className="h-1 w-full bg-status-ok/10 overflow-hidden">
+                    <div className="h-full bg-status-ok animate-shimmer" style={{ width: '100%', background: 'linear-gradient(90deg, transparent 0%, rgba(16, 185, 129, 0.4) 50%, transparent 100%)', backgroundSize: '200% 100%' }}></div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* AI Summary */}
             <Card variant="soft" className="mb-8 animate-fade-in-up border-primary/20 bg-primary/5">
@@ -1354,6 +1437,28 @@ Analizá tu expensa en ExpensaCheck`;
 
             {/* Visual Comparison Chart - Bar chart comparing with previous period */}
             {categories.length > 0 && categories.some(c => c.previous_amount !== null) && (
+              <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in-up">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <Globe className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold">Análisis Comparativo</h3>
+                    <p className="text-sm text-muted-foreground">Comparación detallada con el período anterior</p>
+                  </div>
+                </div>
+                {hasSavingsOpportunities && (
+                  <Button asChild variant="outline" size="sm" className="rounded-full border-status-ok/30 text-status-ok hover:bg-status-ok/10 transition-colors">
+                    <Link to={`/ahorro/${id}`}>
+                      <PiggyBank className="w-4 h-4 mr-2" />
+                      Ver Ahorros del Período
+                    </Link>
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {categories.length > 0 && categories.some(c => c.previous_amount !== null) && (
               <div className="mb-8">
                 <ComparisonChart
                   data={categories
@@ -1389,23 +1494,33 @@ Analizá tu expensa en ExpensaCheck`;
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-1.5 min-w-[280px]">
-                  <label htmlFor="category-filter" className="text-xs font-semibold text-muted-foreground px-1 uppercase tracking-wider">
-                    Análisis específico por rubro
-                  </label>
-                  <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                    <SelectTrigger id="category-filter" className="bg-background/50 backdrop-blur-md border-border/50 h-11 rounded-xl focus:ring-primary/20 transition-all font-medium shadow-sm">
-                      <SelectValue placeholder="Todos los rubros" />
-                    </SelectTrigger>
-                    <SelectContent className="max-h-[300px]">
-                      <SelectItem value="all" className="font-semibold text-primary">📊 Todos los rubros (Total)</SelectItem>
-                      {availableCategories.map((cat) => (
-                        <SelectItem key={cat} value={cat}>
-                          {cat}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="flex items-center gap-2">
+                  {hasSavingsOpportunities && (
+                    <Button asChild variant="outline" size="sm" className="rounded-full border-status-ok/30 text-status-ok hover:bg-status-ok/10 transition-colors hidden md:flex">
+                      <Link to={`/ahorro/${id}`}>
+                        <PiggyBank className="w-4 h-4 mr-2" />
+                        Ahorro Detectado
+                      </Link>
+                    </Button>
+                  )}
+                  <div className="flex flex-col gap-1.5 min-w-[280px]">
+                    <label htmlFor="category-filter" className="text-xs font-semibold text-muted-foreground px-1 uppercase tracking-wider">
+                      Análisis específico por rubro
+                    </label>
+                    <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                      <SelectTrigger id="category-filter" className="bg-background/50 backdrop-blur-md border-border/50 h-11 rounded-xl focus:ring-primary/20 transition-all font-medium shadow-sm">
+                        <SelectValue placeholder="Todos los rubros" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-[300px]">
+                        <SelectItem value="all" className="font-semibold text-primary">📊 Todos los rubros (Total)</SelectItem>
+                        {availableCategories.map((cat) => (
+                          <SelectItem key={cat} value={cat}>
+                            {cat}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </div>
             )}

@@ -2,6 +2,18 @@
 
 This file contains implementation considerations and strategies for each project release.
 
+
+## [1.11.0] - 2026-03-06
+
+### Deployment Strategy & Considerations
+> **Information**: This version introduces savings opportunities (ahorro module).
+
+1. **Database (SQL Migration)**: Execute `20260306154000_create_savings_cache.sql` to add the `expense_type` column to subcategories.
+2. **Edge Functions**: Redeploy the following functions:
+   - `get-savings-opportunities`: Implements the new savings opportunities logic.
+3. **Frontend**: Deploy the web application.
+
+
 ## [1.10.0] - 2026-03-05
 
 ### Deployment Strategy & Considerations

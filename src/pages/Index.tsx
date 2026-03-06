@@ -16,9 +16,11 @@ import {
   Menu,
   X,
   Home,
+  PiggyBank,
+  Wrench,
+  User,
   Briefcase,
   Building2,
-  User,
   LayoutList
 } from "lucide-react";
 import { Logo } from "@/components/layout/ui/logo";
@@ -122,7 +124,7 @@ const EXPENSE_PRICE = Number(import.meta.env.VITE_EXPENSE_PRICE || 5000);
 
 const Header = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [session, setSession] = useState<any>(null);
+  const [session, setSession] = useState<any>(undefined); // undefined = loading, null = no session
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -135,6 +137,8 @@ const Header = () => {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  const isLoading = session === undefined;
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50">
@@ -170,7 +174,9 @@ const Header = () => {
         </nav>
 
         <div className="flex items-center gap-4">
-          {session ? (
+          {isLoading ? (
+            <div className="w-10 h-10 rounded-full bg-accent animate-pulse"></div>
+          ) : session ? (
             <Button asChild variant="ghost" size="icon" title="Mi Perfil" className="rounded-full hover:bg-accent">
               <Link to="/perfil">
                 <User className="w-5 h-5" />
@@ -192,9 +198,11 @@ const Header = () => {
             {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </Button>
 
-          <Button asChild size="lg" className="hidden sm:inline-flex rounded-full shadow-lg shadow-primary/25 font-semibold">
-            <Link to="/analizar">Analizar ahora</Link>
-          </Button>
+          {!isLoading && (
+            <Button asChild size="lg" className="hidden sm:inline-flex rounded-full shadow-lg shadow-primary/25 font-semibold">
+              <Link to="/analizar">Analizar ahora</Link>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -223,7 +231,7 @@ const Header = () => {
             >
               Precios
             </a>
-            {session && (
+            {!isLoading && session && (
               <>
                 <Link
                   to="/historial"
@@ -249,7 +257,7 @@ const Header = () => {
                 </Link>
               </>
             )}
-            {!session && (
+            {!isLoading && !session && (
               <Link
                 to="/auth"
                 className="text-lg font-medium text-muted-foreground hover:text-primary transition-colors"
@@ -412,6 +420,86 @@ const HowItWorksSection = () => {
     </section>
   );
 };
+
+const SavingsHighlightSection = () => (
+  <section className="py-32 relative overflow-hidden bg-background">
+    {/* Decorative background element */}
+    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1000px] h-[600px] bg-status-ok/5 blur-[120px] rounded-[50%] -z-10 rotate-12"></div>
+
+    <div className="container relative z-10">
+      <div className="bg-gradient-to-br from-status-ok/10 via-background to-primary/5 border border-status-ok/20 overflow-hidden rounded-[3.5rem] shadow-2xl shadow-status-ok/5">
+        <div className="p-10 md:p-20">
+          <div className="grid lg:grid-cols-2 gap-16 items-center">
+            <div className="space-y-8">
+              <div className="inline-flex items-center gap-3 px-5 py-2.5 rounded-full bg-status-ok/10 border border-status-ok/20 text-status-ok text-sm font-black shadow-sm animate-bounce-subtle uppercase tracking-widest">
+                <PiggyBank className="w-5 h-5" />
+                Detección de Ahorro Inteligente
+              </div>
+              <h2 className="text-4xl md:text-6xl font-black tracking-tight leading-tight text-foreground">
+                No solo analices. <br />
+                <span className="text-status-ok">Empezá a ahorrar hoy.</span>
+              </h2>
+              <p className="text-xl text-muted-foreground leading-relaxed max-w-xl font-light">
+                Comparamos tus costos con proveedores reales de tu zona. Nuestra IA detecta oportunidades de ahorro en seguros, mantenimiento y servicios para que pagues lo justo.
+              </p>
+              <div className="flex flex-wrap gap-5 pt-4">
+                <Button asChild size="xl" className="rounded-2xl px-10 bg-status-ok hover:bg-status-ok/90 text-white font-bold h-16 shadow-xl shadow-status-ok/20 hover:shadow-status-ok/30 hover:-translate-y-1 transition-all">
+                  <Link to="/ahorro">Ver Oportunidades de Ahorro</Link>
+                </Button>
+                <Button asChild variant="ghost" size="xl" className="rounded-2xl px-10 font-bold h-16 border border-border/50 hover:bg-accent/50">
+                  <Link to="/ejemplo">Ver Demo</Link>
+                </Button>
+              </div>
+            </div>
+
+            <div className="relative group perspective-1000">
+              <div className="bg-background/40 backdrop-blur-3xl rounded-[3rem] border border-status-ok/30 p-10 shadow-3xl relative z-10 transition-transform duration-700 group-hover:rotate-y-2 group-hover:scale-[1.02]">
+                <div className="space-y-8">
+                  <div className="flex items-center justify-between border-b border-border/50 pb-6">
+                    <div className="flex items-center gap-4">
+                      <div className="w-14 h-14 rounded-2xl bg-status-ok/10 flex items-center justify-center text-status-ok border border-status-ok/20 shadow-inner">
+                        <Wrench className="w-7 h-7" />
+                      </div>
+                      <div>
+                        <p className="text-lg font-black text-foreground">Abono Ascensores</p>
+                        <p className="text-xs text-muted-foreground font-medium flex items-center gap-1.5">
+                          <CheckCircle2 className="w-3 h-3 text-status-ok" />
+                          3 alternativas detectadas
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-2xl font-black text-status-ok">-18.5%</p>
+                      <p className="text-[10px] uppercase text-muted-foreground font-black tracking-wider">Ahorro Estimado</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="h-2 w-full bg-muted/30 rounded-full overflow-hidden">
+                      <div className="h-full bg-status-ok w-[82%] rounded-full shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div>
+                    </div>
+                    <div className="flex justify-between text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
+                      <span>Costo Actual</span>
+                      <span className="text-status-ok">Mercado (Promedio)</span>
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-status-ok/5 rounded-2xl border border-status-ok/10 text-xs italic text-muted-foreground leading-relaxed">
+                    "Detectamos que 4 edificios en tu misma manzana pagan 18% menos por el mismo servicio de mantenimiento."
+                  </div>
+                </div>
+              </div>
+
+              {/* Decorative elements */}
+              <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary/20 blur-[60px] rounded-full animate-pulse"></div>
+              <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-status-ok/20 blur-[60px] rounded-full animate-float"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+);
 
 const BenefitsSection = () => {
   const pillars = [
@@ -730,6 +818,7 @@ const Index = () => {
       <main>
         <HeroSection />
         <HowItWorksSection />
+        <SavingsHighlightSection />
         <BenefitsSection />
         <UseCasesSection />
         <PricingSection />

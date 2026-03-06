@@ -28,6 +28,7 @@ import {
   ArrowRight,
   TrendingUp,
   TrendingDown,
+  PiggyBank,
   History,
   FileText,
   LogOut,
@@ -437,10 +438,10 @@ const Historial = () => {
                     <Card
                       key={analysis.id}
                       className={`group transition-all duration-300 rounded-[1.5rem] shadow-md hover:shadow-xl ${isFailed
-                          ? "bg-destructive/5 border-destructive/20 hover:border-destructive/40"
-                          : isLikelyStuck
-                            ? "bg-amber-500/5 border-amber-500/30 hover:border-amber-500/50"
-                            : "bg-primary/5 border-primary/20 hover:border-primary/40"
+                        ? "bg-destructive/5 border-destructive/20 hover:border-destructive/40"
+                        : isLikelyStuck
+                          ? "bg-amber-500/5 border-amber-500/30 hover:border-amber-500/50"
+                          : "bg-primary/5 border-primary/20 hover:border-primary/40"
                         }`}
                     >
                       <CardContent className="p-6 md:p-8">
@@ -448,10 +449,10 @@ const Historial = () => {
                           <div className="flex items-center gap-4">
                             {/* Status icon */}
                             <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${isFailed
-                                ? "bg-destructive/10 text-destructive"
-                                : isLikelyStuck
-                                  ? "bg-amber-500/10 text-amber-600"
-                                  : "bg-primary/10 text-primary"
+                              ? "bg-destructive/10 text-destructive"
+                              : isLikelyStuck
+                                ? "bg-amber-500/10 text-amber-600"
+                                : "bg-primary/10 text-primary"
                               }`}>
                               {isFailed ? (
                                 <X className="w-6 h-6" />
@@ -488,10 +489,10 @@ const Historial = () => {
                               variant="outline"
                               size="sm"
                               className={`rounded-full px-5 font-bold gap-2 ${isFailed
-                                  ? "border-destructive/40 text-destructive hover:bg-destructive/10"
-                                  : isLikelyStuck
-                                    ? "border-amber-500/40 text-amber-700 hover:bg-amber-500/10"
-                                    : "border-primary/30 text-primary hover:bg-primary/10"
+                                ? "border-destructive/40 text-destructive hover:bg-destructive/10"
+                                : isLikelyStuck
+                                  ? "border-amber-500/40 text-amber-700 hover:bg-amber-500/10"
+                                  : "border-primary/30 text-primary hover:bg-primary/10"
                                 }`}
                             >
                               <Link to={`/analizar?payment=success&analysisId=${analysis.id}`}>

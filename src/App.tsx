@@ -12,6 +12,7 @@ import AnalysisPage from "./pages/AnalysisPage";
 import Historial from "./pages/Historial";
 import Comparar from "./pages/Comparar";
 import Evolucion from "./pages/Evolucion";
+import Ahorro from "./pages/Ahorro";
 import Terminos from "./pages/Terminos";
 import Privacidad from "./pages/Privacidad";
 import Contacto from "./pages/Contacto";
@@ -53,6 +54,8 @@ const App = () => {
                 <Route path="/historial" element={<Historial />} />
                 <Route path="/comparar" element={<Comparar />} />
                 <Route path="/evolucion" element={<Evolucion />} />
+                <Route path="/ahorro" element={<Ahorro />} />
+                <Route path="/ahorro/:id" element={<Ahorro />} />
                 <Route path="/terminos" element={<Terminos />} />
                 <Route path="/privacidad" element={<Privacidad />} />
                 <Route path="/contacto" element={<Contacto />} />
