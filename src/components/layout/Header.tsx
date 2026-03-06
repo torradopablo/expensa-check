@@ -28,6 +28,7 @@ export function Header() {
             {[
               { path: "/analizar", label: "Analizar" },
               { path: "/evolucion", label: "Evolución" },
+              { path: "/ahorro", label: "Ahorro" },
               { path: "/historial", label: "Historial" },
               { path: "/comparar", label: "Comparar" },
               { path: "/preparar-reunion", label: "Preparar Reunión" }
@@ -76,6 +77,7 @@ export function Header() {
             {[
               { path: "/analizar", label: "Analizar" },
               { path: "/evolucion", label: "Evolución" },
+              { path: "/ahorro", label: "Ahorro" },
               { path: "/historial", label: "Historial" },
               { path: "/comparar", label: "Comparar" },
               { path: "/preparar-reunion", label: "Preparar Reunión" }

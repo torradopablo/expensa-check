@@ -26,19 +26,24 @@ const EXPENSE_PRICE = Number(import.meta.env.VITE_EXPENSE_PRICE || 5000);
 
 const Header = () => {
   const navigate = useNavigate();
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<any>(undefined); // undefined = loading
+  const [session, setSession] = useState<any>(undefined);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
       setUser(session?.user ?? null);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
       setUser(session?.user ?? null);
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  const isLoading = user === undefined;
 
   const handleLogout = async () => {
     await supabase.auth.signOut();

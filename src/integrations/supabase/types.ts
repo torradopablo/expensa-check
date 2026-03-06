@@ -88,6 +88,7 @@ export type Database = {
           unit: string | null
           updated_at: string
           user_id: string
+          has_savings_opportunities: boolean | null
         }
         Insert: {
           administrator_cuit?: string | null
@@ -108,6 +109,7 @@ export type Database = {
           unit?: string | null
           updated_at?: string
           user_id: string
+          has_savings_opportunities?: boolean | null
         }
         Update: {
           administrator_cuit?: string | null
@@ -128,6 +130,7 @@ export type Database = {
           unit?: string | null
           updated_at?: string
           user_id?: string
+          has_savings_opportunities?: boolean | null
         }
         Relationships: [
           {

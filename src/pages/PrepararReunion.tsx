@@ -408,6 +408,7 @@ const PrepararReunion = () => {
                                     <Select value={selectedBuilding} onValueChange={(val) => {
                                         setSelectedBuilding(val);
                                         setSelectedAnalyses([]);
+                                        setSummary(null);
                                     }}>
                                         <SelectTrigger className="h-14 bg-background/50 border-border/50 rounded-2xl text-lg group focus:ring-primary/20 transition-all">
                                             <div className="flex items-center gap-3">

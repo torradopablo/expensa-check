@@ -451,6 +451,18 @@ const SharedAnalysis = () => {
         return;
       }
 
+      setIsLoading(true);
+      setError(null);
+      setAnalysis(null);
+      setCategories([]);
+      setHistoricalData([]);
+      setEvolutionData([]);
+      setDeviation(null);
+      setBuildingsTrendStats(null);
+      setComments([]);
+      setInflationDataRaw([]);
+      setCategoryTrends({});
+
       try {
         console.log("Fetching shared analysis for token:", token);
 

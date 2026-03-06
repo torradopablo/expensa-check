@@ -121,6 +121,14 @@ export default {
             "background-position": "right center"
           }
         },
+        "bounce-subtle": {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-4px)" }
+        },
+        "shimmer": {
+          "0%": { "background-position": "-200% 0" },
+          "100%": { "background-position": "200% 0" }
+        }
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -132,6 +140,8 @@ export default {
         "float": "float 3s ease-in-out infinite",
         "pulse-slow": "pulse 3s ease-in-out infinite",
         "gradient-x": "gradient-x 4s ease infinite",
+        "bounce-subtle": "bounce-subtle 3s ease-in-out infinite",
+        "shimmer": "shimmer 2s infinite linear",
       },
     },
   },
