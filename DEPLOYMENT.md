@@ -3,6 +3,19 @@
 This file contains implementation considerations and strategies for each project release.
 
 
+## [1.12.0] - 2026-03-11
+
+### Deployment Strategy & Considerations
+> **Information**: This version focuses on data quality, privacy (CUIT filtering), and commercial UX refinement.
+
+1. **Database (SQL Migration)**: Execute `20260310222000_create_meeting_prep_cache.sql`.
+2. **Edge Functions**: Redeploy the following functions:
+   - `process-expense`: Implements the new CUIT filtering logic for anonymized data.
+   - `get-savings-opportunities`: Updated to exclude the current provider from suggested alternatives.
+   - `mercadopago-webhook`: Refined to prevent status overwrite during processing.
+3. **Frontend**: Deploy the web application.
+
+
 ## [1.11.0] - 2026-03-06
 
 ### Deployment Strategy & Considerations

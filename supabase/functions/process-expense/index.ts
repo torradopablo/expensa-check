@@ -13,6 +13,7 @@ import { ComparisonService } from "../_shared/services/analysis/ComparisonServic
 import { EvolutionInsightService } from "../_shared/services/analysis/EvolutionInsightService.ts";
 import { buildPeriodDate } from "../_shared/utils/date.utils.ts";
 import { ValidationError, AuthenticationError, isRateLimitError } from "../_shared/utils/error.utils.ts";
+import { isLegalEntityCuit } from "../_shared/utils/cuit.utils.ts";
 import type { ValidatedAIResponse } from "../_shared/types/analysis.types.ts";
 
 
@@ -309,33 +310,35 @@ serve(async (req) => {
 
             // Save ALL subcategory data anonymously for the Savings Engine / crowdsourcing
             // Even subcategories without an explicit provider are valuable for price benchmarking
-            const anonymizedPrices = subcategoriesToInsert.map(s => {
-              let categoryName = "Desconocida";
-              if (createdCategories) {
-                const cat = (createdCategories as any[]).find(c => c.id === s.category_id);
-                if (cat) categoryName = cat.name;
-              }
+            const anonymizedPrices = subcategoriesToInsert
+              .filter(s => isLegalEntityCuit(s.provider_cuit)) // Only persist legal entities (CUIT), skip individuals (CUIL)
+              .map(s => {
+                let categoryName = "Desconocida";
+                if (createdCategories) {
+                  const cat = (createdCategories as any[]).find(c => c.id === s.category_id);
+                  if (cat) categoryName = cat.name;
+                }
 
-              return {
-                provider_name: s.provider_name || s.name, // Subcategory name as fallback identifier
-                provider_cuit: s.provider_cuit || null,
-                provider_type: (s as any).provider_type || null,
-                cuit_confirmed: (s as any).cuit_confirmed === true,
-                category_name: categoryName,
-                subcategory_name: s.name,
-                amount: s.amount,
-                expense_type: s.expense_type,
-                period: extractedData.period,
-                period_month: extractedData.period_month || null,
-                period_year: extractedData.period_year || null,
-                building_zone: extractedData.building_profile?.zone || null,
-                building_unit_count: extractedData.building_profile?.unit_count_range || null,
-                city: extractedData.building_profile?.city || null,
-                neighborhood: extractedData.building_profile?.neighborhood || null,
-                province: extractedData.building_profile?.province || null,
-                raw_building_address: (extractedData as any).building_address || null,
-              };
-            });
+                return {
+                  provider_name: s.provider_name || s.name, // Subcategory name as fallback identifier
+                  provider_cuit: s.provider_cuit || null,
+                  provider_type: (s as any).provider_type || null,
+                  cuit_confirmed: (s as any).cuit_confirmed === true,
+                  category_name: categoryName,
+                  subcategory_name: s.name,
+                  amount: s.amount,
+                  expense_type: s.expense_type,
+                  period: extractedData.period,
+                  period_month: extractedData.period_month || null,
+                  period_year: extractedData.period_year || null,
+                  building_zone: extractedData.building_profile?.zone || null,
+                  building_unit_count: extractedData.building_profile?.unit_count_range || null,
+                  city: extractedData.building_profile?.city || null,
+                  neighborhood: extractedData.building_profile?.neighborhood || null,
+                  province: extractedData.building_profile?.province || null,
+                  raw_building_address: (extractedData as any).building_address || null,
+                };
+              });
 
             if (anonymizedPrices.length > 0) {
               await analysisRepository.createAnonymizedProviderPrices(anonymizedPrices).catch(e => {
@@ -349,7 +352,8 @@ serve(async (req) => {
     }
 
     // Save anonymized administrator data for crowdsourcing / Savings Engine
-    if (extractedData.administrator_name && extractedData.administrator_name.trim() !== '') {
+    // ONLY if it's a legal entity (CUIT), skip private individuals (CUIL)
+    if (extractedData.administrator_name && extractedData.administrator_name.trim() !== '' && isLegalEntityCuit(extractedData.administrator_cuit)) {
       await analysisRepository.createAnonymizedAdministratorData({
         administrator_name: extractedData.administrator_name,
         administrator_cuit: extractedData.administrator_cuit || null,
@@ -385,7 +389,7 @@ serve(async (req) => {
     // If we reached this point, the analysis is 'completed' and categories are saved.
     // This allows the user to retry (re-procesar) if anything failed before this.
     if (filePath) {
-      console.log("Success! Cleaning up storage...");
+      console.log(`Success! Processing completed. Deleting file from storage: ${filePath}...`);
       // Use service role to ensure deletion permissions regardless of user RLS
       const systemStorageService = new StorageService();
       const { error: deleteFileError } = await systemStorageService.deleteFile("expense-files", filePath);
@@ -393,8 +397,14 @@ serve(async (req) => {
       if (deleteFileError) {
         console.error("File deletion error (non-critical):", deleteFileError);
       } else {
-        // Update the analysis to clear the file_url since the file no longer exists
-        await analysisRepository.updateAnalysis(analysisId, { file_url: "" });
+        // Update the analysis to clear the file_url since the file no longer exists.
+        // The main status was already set to 'completed' previously.
+        const { error: fileUrlClearError } = await analysisRepository.updateAnalysis(analysisId, { file_url: "" });
+        if (fileUrlClearError) {
+          console.error("Error clearing file_url after successful deletion (non-critical):", fileUrlClearError);
+        } else {
+          console.log("File deleted and file_url cleared from DB.");
+        }
       }
     }
 

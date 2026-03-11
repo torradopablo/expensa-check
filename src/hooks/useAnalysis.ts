@@ -5,6 +5,7 @@ import type { Analysis, Category, BuildingProfile } from "../types/analysis";
 
 export interface UseAnalysisState {
   analyses: Analysis[];
+  attentionAnalyses: Analysis[];
   totalCount: number;
   buildings: string[];
   categories: string[];
@@ -53,6 +54,8 @@ export function useAnalysis(filters?: UseAnalysisFilters) {
       let query = supabase
         .from("expense_analyses")
         .select("*, expense_categories(*)", { count: 'exact' })
+        // Only completed analyses in the paginated list
+        .eq("status", "completed")
         .order("period_date", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false });
 
@@ -73,6 +76,30 @@ export function useAnalysis(filters?: UseAnalysisFilters) {
     },
     initialPageParam: 0,
   });
+
+  // Separate query that ALWAYS fetches all attention-requiring analyses (no pagination)
+  // This ensures they always appear at the top regardless of how many completed analyses exist
+  const { data: attentionAnalysesData = [] } = useQuery({
+    queryKey: ["analyses-attention"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("expense_analyses")
+        .select("*, expense_categories(*)")
+        .in("status", ["processing", "paid", "failed", "pending"])
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return data as Analysis[];
+    },
+    // Refresh every 15 seconds while any are in progress
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      const hasActiveProcessing = data?.some(a => a.status === "processing" || a.status === "paid");
+      return hasActiveProcessing ? 15000 : false;
+    },
+  });
+
+  const attentionAnalyses = attentionAnalysesData;
 
   const analyses = infiniteAnalyses?.pages.map(p => p.data).flat() || [];
   const totalCount = infiniteAnalyses?.pages[0]?.totalCount || 0;
@@ -264,6 +291,7 @@ export function useAnalysis(filters?: UseAnalysisFilters) {
 
   return {
     analyses,
+    attentionAnalyses,
     totalCount,
     buildings,
     categories: allCategories,

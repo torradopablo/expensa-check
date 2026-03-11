@@ -247,11 +247,26 @@ serve(async (req) => {
 
       console.log(`Analysis ${analysisId} updated to status: ${newStatus}`);
 
+      // Fetch the current state from DB to avoid overwriting 'completed' or 'processing'
+      const { data: currentAnalysis, error: fetchStateError } = await supabase
+        .from("expense_analyses")
+        .select("status")
+        .eq("id", analysisId)
+        .single();
+
+      let finalStatusToSet = newStatus;
+      if (!fetchStateError && currentAnalysis) {
+        if (currentAnalysis.status === "completed" || currentAnalysis.status === "processing") {
+          console.log(`Analysis ${analysisId} is already ${currentAnalysis.status}, skipping status overwrite to ${newStatus}`);
+          finalStatusToSet = currentAnalysis.status; // Keep existing status
+        }
+      }
+
       // Update the status in the database
       const { error: updateError } = await supabase
         .from("expense_analyses")
         .update({
-          status: newStatus,
+          status: finalStatusToSet,
           payment_id: payment.id.toString(),
           updated_at: new Date().toISOString()
         })
@@ -317,13 +332,24 @@ serve(async (req) => {
         if (order.status === "closed" && order.external_reference) {
           const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
           if (uuidRegex.test(order.external_reference)) {
-            const { error } = await supabase
+            // Check current status before overwriting
+            const { data: currentAnalysis } = await supabase
               .from("expense_analyses")
-              .update({ status: "paid" })
-              .eq("id", order.external_reference);
+              .select("status")
+              .eq("id", order.external_reference)
+              .single();
 
-            if (error) {
-              console.error("Error updating from merchant order:", error);
+            if (!currentAnalysis || (currentAnalysis.status !== "completed" && currentAnalysis.status !== "processing")) {
+              const { error } = await supabase
+                .from("expense_analyses")
+                .update({ status: "paid" })
+                .eq("id", order.external_reference);
+
+              if (error) {
+                console.error("Error updating from merchant order:", error);
+              }
+            } else {
+              console.log(`Merchant order skips update, analysis is already ${currentAnalysis.status}`);
             }
           } else {
             console.error("Invalid external_reference format in merchant order:", order.external_reference);
