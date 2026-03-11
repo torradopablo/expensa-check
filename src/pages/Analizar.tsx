@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -434,45 +434,90 @@ const PaymentStep = ({
   );
 };
 
-const ProcessingStep = () => (
-  <div className="max-w-2xl mx-auto text-center animate-fade-in-up">
-    <Card className="bg-card/40 backdrop-blur-xl border-border/50 shadow-2xl rounded-[3rem] overflow-hidden py-16 px-10">
-      <CardContent className="space-y-10">
-        <div className="relative mx-auto w-32 h-32">
-          <div className="absolute inset-0 bg-primary/20 rounded-full animate-ping opacity-30"></div>
-          <div className="relative w-32 h-32 rounded-full bg-primary/10 flex items-center justify-center border-2 border-primary/30 backdrop-blur-md">
-            <Loader2 className="w-16 h-16 text-primary animate-spin" />
-          </div>
-        </div>
+const ProcessingStep = () => {
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [currentStepIdx, setCurrentStepIdx] = useState(0);
 
-        <div className="space-y-4">
-          <h2 className="text-4xl font-extrabold tracking-tight">Procesando tu Expensa</h2>
-          <p className="text-xl text-muted-foreground font-medium max-w-sm mx-auto">
-            Nuestra IA está extrayendo y comparando miles de puntos de datos.
-          </p>
-        </div>
+  const processingSteps = [
+    "Extrayendo rubros del PDF",
+    "Cruzando con red de edificios",
+    "Identificando desvíos significativos",
+    "Generando resumen operativo",
+  ];
 
-        <div className="bg-muted/30 rounded-[2rem] p-8 space-y-4 max-w-sm mx-auto border border-border/50">
-          {[
-            "Extrayendo rubros del PDF",
-            "Cruzando con red de edificios",
-            "Identificando desvíos significativos",
-            "Generando resumen operativo"
-          ].map((step, index) => (
-            <div
-              key={index}
-              className="flex items-center gap-4 text-left group transition-all"
-              style={{ animationDelay: `${index * 0.8}s` }}
-            >
-              <div className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse shadow-sm shadow-primary/50" />
-              <span className="text-base font-medium text-muted-foreground group-hover:text-foreground transition-colors">{step}</span>
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setElapsedSeconds(s => s + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    // Advance the current step every ~12 seconds
+    const stepTimer = setInterval(() => {
+      setCurrentStepIdx(i => Math.min(i + 1, processingSteps.length - 1));
+    }, 12000);
+    return () => clearInterval(stepTimer);
+  }, []);
+
+  const minutes = Math.floor(elapsedSeconds / 60);
+  const secs = elapsedSeconds % 60;
+  const elapsedLabel = minutes > 0
+    ? `${minutes}m ${secs}s`
+    : `${secs}s`;
+
+  return (
+    <div className="max-w-2xl mx-auto text-center animate-fade-in-up">
+      <Card className="bg-card/40 backdrop-blur-xl border-border/50 shadow-2xl rounded-[3rem] overflow-hidden py-16 px-10">
+        <CardContent className="space-y-10">
+          <div className="relative mx-auto w-32 h-32">
+            <div className="absolute inset-0 bg-primary/20 rounded-full animate-ping opacity-30"></div>
+            <div className="relative w-32 h-32 rounded-full bg-primary/10 flex items-center justify-center border-2 border-primary/30 backdrop-blur-md">
+              <Loader2 className="w-16 h-16 text-primary animate-spin" />
             </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  </div>
-);
+          </div>
+
+          <div className="space-y-3">
+            <h2 className="text-4xl font-extrabold tracking-tight">Procesando tu Expensa</h2>
+            <p className="text-xl text-muted-foreground font-medium max-w-sm mx-auto">
+              Nuestra IA está extrayendo y comparando miles de puntos de datos.
+            </p>
+            <p className="text-sm font-bold text-muted-foreground/60 tabular-nums">
+              ⏱ Tiempo transcurrido: {elapsedLabel}
+            </p>
+          </div>
+
+          <div className="bg-muted/30 rounded-[2rem] p-8 space-y-4 max-w-sm mx-auto border border-border/50">
+            {processingSteps.map((step, index) => (
+              <div
+                key={index}
+                className="flex items-center gap-4 text-left group transition-all"
+              >
+                <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 transition-all duration-500 ${index < currentStepIdx
+                    ? "bg-primary shadow-sm shadow-primary/50"
+                    : index === currentStepIdx
+                      ? "bg-primary animate-pulse shadow-sm shadow-primary/50"
+                      : "bg-muted-foreground/20"
+                  }`} />
+                <span className={`text-base font-medium transition-colors ${index <= currentStepIdx ? "text-foreground" : "text-muted-foreground/40"
+                  }`}>{step}</span>
+                {index < currentStepIdx && (
+                  <CheckCircle2 className="w-4 h-4 text-primary ml-auto flex-shrink-0" />
+                )}
+              </div>
+            ))}
+          </div>
+
+          {elapsedSeconds > 60 && (
+            <p className="text-xs text-muted-foreground/60 max-w-xs mx-auto">
+              Esto puede tardar entre 1-3 minutos según el tamaño del archivo. Podés cerrar esta pestaña y volver más tarde desde el historial.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
 
 const PaymentSuccessHandler = ({
   analysisId,
@@ -483,10 +528,14 @@ const PaymentSuccessHandler = ({
   file: File | null;
   onProcessingComplete: (id: string) => void;
 }) => {
-  const [isProcessing, setIsProcessing] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const hasStartedRef = useRef(false);
 
   useEffect(() => {
+    // Guard: only run once even if deps re-render
+    if (hasStartedRef.current) return;
+    hasStartedRef.current = true;
+
     const processExpense = async () => {
       let currentFile = file;
 
@@ -494,51 +543,61 @@ const PaymentSuccessHandler = ({
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error("No autorizado");
 
-        // If file is missing (e.g. refresh), try to fetch it from storage using analysisId
-        if (!currentFile) {
-          console.log("File missing in state, checking for file_url in DB...");
-          const { data: analysis, error: fetchError } = await supabase
-            .from("expense_analyses")
-            .select("file_url")
-            .eq("id", analysisId)
-            .single();
+        // FIRST: Check current status to avoid re-processing
+        const { data: currentAnalysis } = await supabase
+          .from("expense_analyses")
+          .select("status, file_url")
+          .eq("id", analysisId)
+          .single();
 
-          if (!fetchError && analysis?.file_url) {
-            console.log("File URL found in DB, attempting to download...");
-            const { data: fileBlob, error: downloadError } = await supabase.storage
-              .from("expense-files")
-              .download(analysis.file_url);
+        // If already completed (e.g. user navigated back from history), just redirect
+        if (currentAnalysis?.status === "completed") {
+          console.log("[PaymentSuccessHandler] Already completed, redirecting...");
+          onProcessingComplete(analysisId);
+          return;
+        }
 
-            if (!downloadError && fileBlob) {
-              const fileName = analysis.file_url.split('/').pop() || "expensa.pdf";
-              currentFile = new File([fileBlob], fileName, { type: "application/pdf" });
-              console.log("File recovered from storage");
-            } else {
-              console.warn("Could not download file from storage, Edge Function will try to recover it");
-            }
+        // If currently processing (another tab or previous session), just show loading
+        // and let the edge function resolve naturally — don't fire again
+        if (currentAnalysis?.status === "processing") {
+          console.log("[PaymentSuccessHandler] Already processing in another session. Waiting for completion...");
+          // We intentionally DON'T call process-expense again.
+          // The ProcessingStep UI is already shown. The user can F5 to re-check.
+          return;
+        }
+
+        // Recover file from storage if needed
+        if (!currentFile && currentAnalysis?.file_url) {
+          console.log("[PaymentSuccessHandler] File missing in state, recovering from storage...");
+          const { data: fileBlob, error: downloadError } = await supabase.storage
+            .from("expense-files")
+            .download(currentAnalysis.file_url);
+
+          if (!downloadError && fileBlob) {
+            const fileName = currentAnalysis.file_url.split('/').pop() || "expensa.pdf";
+            currentFile = new File([fileBlob], fileName, { type: "application/pdf" });
+            console.log("[PaymentSuccessHandler] File recovered from storage.");
+          } else {
+            console.warn("[PaymentSuccessHandler] Could not download file. Edge Function will try to recover it.");
           }
         }
 
         const formData = new FormData();
-        if (currentFile) {
-          formData.append("file", currentFile);
-        }
+        if (currentFile) formData.append("file", currentFile);
         formData.append("analysisId", analysisId);
 
-        // Update status to processing
+        // Mark as processing
         await supabase
           .from("expense_analyses")
           .update({ status: "processing" })
           .eq("id", analysisId);
 
-        console.log("Starting analysis processing...");
+        console.log("[PaymentSuccessHandler] Calling process-expense edge function...");
         const response = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-expense`,
           {
             method: "POST",
-            headers: {
-              Authorization: `Bearer ${session.access_token}`,
-            },
+            headers: { Authorization: `Bearer ${session.access_token}` },
             body: formData,
           }
         );
@@ -550,20 +609,28 @@ const PaymentSuccessHandler = ({
 
         onProcessingComplete(analysisId);
       } catch (err: any) {
-        console.error("Processing error:", err);
+        console.error("[PaymentSuccessHandler] Processing error:", err);
         setError(err.message || "Error al procesar la expensa");
-        setIsProcessing(false);
 
-        // Mark as failed in DB
-        await supabase
+        // Only mark as failed if it wasn't completed during the process
+        const { data: check } = await supabase
           .from("expense_analyses")
-          .update({ status: "failed" })
-          .eq("id", analysisId);
+          .select("status")
+          .eq("id", analysisId)
+          .single();
+
+        if (check?.status !== "completed") {
+          await supabase
+            .from("expense_analyses")
+            .update({ status: "failed" })
+            .eq("id", analysisId);
+        }
       }
     };
 
     processExpense();
-  }, [analysisId, file, onProcessingComplete]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analysisId]); // Intentionally only depends on analysisId — file and callback are captured via ref/closure
 
   if (error) {
     return (
@@ -577,9 +644,14 @@ const PaymentSuccessHandler = ({
               <h2 className="text-2xl font-bold mb-2">Error al procesar</h2>
               <p className="text-muted-foreground">{error}</p>
             </div>
-            <Button asChild variant="hero">
-              <Link to="/analizar">Intentar de nuevo</Link>
-            </Button>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Button asChild variant="hero">
+                <Link to="/analizar">Intentar de nuevo</Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link to="/historial">Ver mis análisis</Link>
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -820,10 +892,10 @@ const Analizar = () => {
     }
   };
 
-  const handleProcessingComplete = (id: string) => {
-    toast.success("¡Análisis completado!");
+  const handleProcessingComplete = useCallback((id: string) => {
+    toast.success("¡Análisis completado! Tu reporte está listo.");
     navigate(`/analisis/${id}`);
-  };
+  }, [navigate]);
 
   return (
     <div className="min-h-screen relative overflow-hidden">

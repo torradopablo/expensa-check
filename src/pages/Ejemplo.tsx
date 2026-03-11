@@ -249,6 +249,29 @@ const mockComments = [
   }
 ];
 
+const mockSavings = [
+  {
+    id: "1",
+    provider_name: "Ascensores Elevadores SRL",
+    current_cost: 65000,
+    market_average: 48000,
+    potential_savings: 17000,
+    confidence: "alta",
+    alternative_providers: 3,
+    category: "Mantenimiento"
+  },
+  {
+    id: "2",
+    provider_name: "Sanitarios y Bombas CABA",
+    current_cost: 32000,
+    market_average: 26500,
+    potential_savings: 5500,
+    confidence: "media",
+    alternative_providers: 2,
+    category: "Reparaciones"
+  }
+];
+
 const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat('es-AR', {
     style: 'currency',
@@ -301,7 +324,7 @@ const Ejemplo = () => {
             </div>
 
             {/* Pipeline Indicator */}
-            <div className="grid grid-cols-4 gap-2 mb-12">
+            <div className="grid grid-cols-5 gap-2 mb-12">
               {[
                 { label: "Análisis", icon: FileSearch, active: true },
                 { label: "Evolución", icon: Clock, active: true },
@@ -673,10 +696,79 @@ const Ejemplo = () => {
               />
             </div>
 
-            {/* Step 4 Heading */}
+            {/* Step 4: Ahorro Heading */}
+            <div className="flex items-center gap-3 mt-16 mb-8 animate-fade-in text-emerald-600">
+              <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                <span className="font-bold">4</span>
+              </div>
+              <h2 className="text-xl font-bold uppercase tracking-tight">Motor de Ahorro Activo</h2>
+            </div>
+
+            <div className="grid gap-6 mb-8">
+              <p className="text-muted-foreground text-sm leading-relaxed bg-emerald-500/5 p-4 rounded-2xl border border-emerald-500/10">
+                <strong className="text-foreground">Recuperá tu dinero:</strong> Además de analizar, ExpensaCheck cruza los CUITs de los proveedores de tu edificio con los de miles de otros consorcios. Así identificamos al instante si tu administrador está <strong>pagando sobreprecios</strong> y te damos presupuestos alternativos reales para exigir cambios.
+              </p>
+            </div>
+
+            <div className="mb-12">
+              <div className="grid md:grid-cols-2 gap-6">
+                {mockSavings.map((saving) => (
+                  <Card key={saving.id} className="relative overflow-hidden border-emerald-500/20 bg-emerald-500/5 hover:shadow-xl transition-all duration-300">
+                    <div className="absolute -right-6 -top-6 w-24 h-24 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
+                    <CardHeader className="pb-2">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 border-emerald-500/20 mb-2">
+                            Sobreprecio Detectado
+                          </Badge>
+                          <CardTitle className="text-lg font-bold text-foreground">
+                            {saving.provider_name}
+                          </CardTitle>
+                        </div>
+                        <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                          <PiggyBank className="w-5 h-5 text-emerald-600" />
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        <div className="flex items-end gap-2">
+                          <span className="text-3xl font-black text-emerald-600">
+                            {formatCurrency(saving.potential_savings)}
+                          </span>
+                          <span className="text-sm text-muted-foreground font-medium mb-1">
+                            de ahorro mensual
+                          </span>
+                        </div>
+
+                        <div className="space-y-2 mt-4">
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="text-muted-foreground">Estás pagando:</span>
+                            <span className="font-bold line-through opacity-70">{formatCurrency(saving.current_cost)}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="text-muted-foreground">Promedio en tu zona:</span>
+                            <span className="font-bold text-emerald-600">{formatCurrency(saving.market_average)}</span>
+                          </div>
+                        </div>
+
+                        <div className="pt-4 border-t border-emerald-500/10">
+                          <p className="text-xs text-muted-foreground flex items-center gap-1.5 font-medium">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                            Tenemos {saving.alternative_providers} presupuestos alternativos más baratos.
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+
+            {/* Step 5 Heading */}
             <div className="flex items-center gap-3 mt-16 mb-8 animate-fade-in text-secondary">
               <div className="w-8 h-8 rounded-lg bg-secondary/10 border border-secondary/20 flex items-center justify-center">
-                <span className="font-bold">4</span>
+                <span className="font-bold">5</span>
               </div>
               <h2 className="text-xl font-bold uppercase tracking-tight">Preparación de Reunión (Agenda IA)</h2>
             </div>

@@ -4,6 +4,7 @@ import { createSupabaseClient, createServiceClient } from "../_shared/config/sup
 import { AnalysisRepository } from "../_shared/services/database/AnalysisRepository.ts";
 import { MeetingPrepService } from "../_shared/services/analysis/MeetingPrepService.ts";
 import { AuthenticationError, ValidationError, AppError } from "../_shared/utils/error.utils.ts";
+import { encodeHex } from "https://deno.land/std@0.224.0/encoding/hex.ts";
 
 // Version: 1.0.3
 serve(async (req: Request) => {
@@ -138,7 +139,62 @@ serve(async (req: Request) => {
             period: analysisMap.get(c.analysis_id) || "General"
         }));
 
-        // 4. Generate Summary using AI
+        // 4. Generate Cache Key
+        // Incorporate analysis_ids, owner notes, and all comments into the hash.
+        // This guarantees that if the user adds/edits a comment or note, the cache key changes 
+        // and a fresh AI generation occurs automatically.
+        const sortedIds = [...analysis_ids].sort().join(",");
+
+        // Extract all text that could affect the AI's output
+        const ownerNotesText = validAnalyses.map(a => a.owner_notes || "").join("|");
+        const commentsText = (allComments || []).map((c: any) => `${c.id}:${c.content}`).join("|");
+
+        const rawContentToHash = `${sortedIds}@@${ownerNotesText}@@${commentsText}`;
+
+        // Use a simple hash for the cache key
+        const encoder = new TextEncoder();
+        const dataBuffer = encoder.encode(rawContentToHash);
+        const hashBuffer = await crypto.subtle.digest("SHA-256", dataBuffer);
+        const cacheKey = encodeHex(hashBuffer);
+
+        console.log(`[prepare-meeting] Cache key generated: ${cacheKey}`);
+
+        // Set a Cache TTL of 30 days (30 * 24 * 60 * 60 * 1000 ms)
+        // If it's older than 30 days, we let the AI generate a fresh checklist.
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+        // Check if we have a valid (not expired) cached summary for this exact combination
+        const { data: cachedPrep, error: cacheError } = await supabaseService
+            .from("meeting_prep_cache")
+            .select("data, created_at")
+            .eq("cache_key", cacheKey)
+            .gte("created_at", thirtyDaysAgo)
+            .maybeSingle();
+
+        if (!cacheError && cachedPrep) {
+            console.log(`[prepare-meeting] Cache hit! Returning cached summary for key ${cacheKey}`);
+
+            // Log the usage even for cached results to respect rate limits
+            try {
+                await supabase
+                    .from("meeting_preparation_logs")
+                    .insert({
+                        user_id: user.id,
+                        building_name: building_name || (validAnalyses[0] && validAnalyses[0].building_name) || "Consorcio"
+                    });
+            } catch (logError) {
+                console.error("[prepare-meeting] Failed to log usage:", logError);
+            }
+
+            return new Response(
+                JSON.stringify(cachedPrep.data),
+                { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+        }
+
+        console.log(`[prepare-meeting] Cache miss. Generating new summary.`);
+
+        // 5. Generate Summary using AI
         const finalBuildingName = building_name || (validAnalyses[0] && validAnalyses[0].building_name) || "Consorcio";
 
         console.log(`[prepare-meeting] Requesting AI summary for ${finalBuildingName} using OpenAI`);
@@ -149,7 +205,20 @@ serve(async (req: Request) => {
             commentsByType
         });
 
-        // 5. Log the usage
+        // 6. Save back to cache
+        try {
+            await supabaseService
+                .from("meeting_prep_cache")
+                .upsert({
+                    cache_key: cacheKey,
+                    data: summary
+                }, { onConflict: "cache_key" });
+            console.log(`[prepare-meeting] Saved new summary to cache with key ${cacheKey}`);
+        } catch (saveCacheError) {
+            console.error("[prepare-meeting] Failed to save to cache (non-blocking):", saveCacheError);
+        }
+
+        // 7. Log the usage
         try {
             await supabase
                 .from("meeting_preparation_logs")

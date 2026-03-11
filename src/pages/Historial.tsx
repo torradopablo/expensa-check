@@ -142,6 +142,7 @@ const Historial = () => {
 
   const {
     analyses,
+    attentionAnalyses,
     totalCount,
     buildings,
     loading,
@@ -231,18 +232,13 @@ const Historial = () => {
 
 
 
-  // Separate problematic analyses (failed OR stuck processing) from completed ones
-  const attentionAnalyses = useMemo(() => {
-    return analyses.filter(a => a.status === "failed" || a.status === "processing" || a.status === "paid");
-  }, [analyses]);
+  // attentionAnalyses now comes directly from the hook with its own dedicated query.
+  // This guarantees they always appear at top, even when they're outside the current
+  // paginated window of completed analyses.
 
-  // Filter and sort successful/processing analyses
+  // Filter and sort successful analyses (hook already only returns completed ones)
   const filteredCompletedAnalyses = useMemo(() => {
-    const relevantAnalyses = analyses.filter(a =>
-      a.status === "completed"
-    );
-
-    const filtered = relevantAnalyses.filter(analysis => {
+    return analyses.filter(analysis => {
       // Search query filter
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase().trim();
@@ -260,13 +256,6 @@ const Historial = () => {
       }
 
       return true;
-    });
-
-    // Sort by period_date or created_at (newest first)
-    return filtered.sort((a, b) => {
-      const dateA = a.period_date ? new Date(a.period_date).getTime() : new Date(a.created_at).getTime();
-      const dateB = b.period_date ? new Date(b.period_date).getTime() : new Date(b.created_at).getTime();
-      return dateB - dateA;
     });
   }, [analyses, searchQuery, buildingFilter]);
 
@@ -314,8 +303,8 @@ const Historial = () => {
               <div>
                 <h1 className="text-4xl font-extrabold tracking-tight">Mis Expensas</h1>
                 <p className="text-muted-foreground font-medium mt-1">
-                  {totalCount > 0
-                    ? `Mostrando ${filteredCompletedAnalyses.length + attentionAnalyses.length} de ${totalCount} análisis`
+                  {totalCount > 0 || attentionAnalyses.length > 0
+                    ? `${filteredCompletedAnalyses.length + attentionAnalyses.length} análisis (${attentionAnalyses.length > 0 ? `${attentionAnalyses.length} pendientes, ` : ''}${totalCount} procesados)`
                     : "0 análisis"}
                 </p>
               </div>
@@ -520,7 +509,7 @@ const Historial = () => {
             </div>
           )}
 
-          {analyses.filter(a => a.status === "completed").length === 0 ? (
+          {analyses.length === 0 ? (
             <Card variant="soft" className="animate-fade-in-up">
               <CardContent className="p-12 text-center">
                 <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-6">

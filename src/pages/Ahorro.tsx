@@ -15,7 +15,8 @@ import {
     Info,
     Sparkles,
     AlertCircle,
-    Loader2
+    Loader2,
+    CheckCircle2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -161,7 +162,7 @@ const AhorroPage = () => {
             <main className="pt-32">
                 <div className="container max-w-4xl">
                     {/* Hero Section */}
-                    <div className="relative overflow-hidden rounded-[2.5rem] bg-primary text-primary-foreground p-8 md:p-12 mb-12 shadow-2xl shadow-primary/20">
+                    <div className="relative overflow-hidden rounded-[2.5rem] bg-emerald-500 text-white p-8 md:p-12 mb-12 shadow-2xl shadow-emerald-500/20">
                         <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl"></div>
                         <div className="absolute bottom-0 left-0 w-48 h-48 bg-black/10 rounded-full translate-y-1/2 -translate-x-1/2 blur-2xl"></div>
 
@@ -171,12 +172,12 @@ const AhorroPage = () => {
                             </div>
                             <div className="text-center md:text-left">
                                 <h2 className="text-2xl md:text-4xl font-black mb-2 tracking-tight">
-                                    Tenes una oportunidad de ahorro de {formatCurrency(totalPotentialSavings)}
+                                    Podés ahorrar hasta {formatCurrency(totalPotentialSavings)} por mes
                                 </h2>
-                                <p className="text-primary-foreground/80 text-lg font-medium">
+                                <p className="text-emerald-50/90 text-lg font-medium">
                                     {opportunities.length > 0
-                                        ? `Analizamos ${analysis?.building_name} (${analysis?.period}) y detectamos ${opportunities.length} rubros para optimizar.`
-                                        : analysis ? `Analizamos ${analysis.building_name} (${analysis.period}) y estás en línea con los precios de mercado.` : "Analizamos tus gastos y por ahora estás en línea con los precios de mercado."}
+                                        ? `Analizamos la expensa de ${analysis?.period} y cruzamos los datos con otros consorcios. Detectamos ${opportunities.length} proveedores con sobreprecios significativos.`
+                                        : analysis ? `Analizamos tu consorcio y por ahora estás pagando valores competitivos en tu zona.` : "Analizamos tus gastos y por ahora estás pagando valores competitivos."}
                                 </p>
                             </div>
                         </div>
@@ -218,71 +219,82 @@ const AhorroPage = () => {
                                 const Icon = iconMap[opp.category.toLowerCase()] || iconMap[opp.subcategory.toLowerCase()] || Sparkles;
 
                                 return (
-                                    <Card key={idx} className="overflow-hidden border-border/50 hover:shadow-xl transition-all duration-300 group">
-                                        <CardContent className="p-0">
+                                    <Card key={idx} className="relative overflow-hidden border-emerald-500/20 bg-emerald-500/5 hover:shadow-xl transition-all duration-300 group">
+                                        <div className="absolute -right-6 -top-6 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
+                                        <CardContent className="p-0 relative z-10">
                                             <div className="flex flex-col md:flex-row">
-                                                {/* Category Info */}
-                                                <div className="p-6 md:w-1/3 bg-muted/20 border-b md:border-b-0 md:border-r border-border/50 flex flex-col justify-center">
-                                                    <div className="flex items-center gap-3 mb-4">
-                                                        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                                                            <Icon className="w-5 h-5 text-primary" />
-                                                        </div>
+                                                {/* Left Column: Saving Info */}
+                                                <div className="p-6 md:w-2/5 border-b md:border-b-0 md:border-r border-emerald-500/20 flex flex-col justify-center">
+                                                    <div className="flex items-start justify-between mb-4">
                                                         <div>
-                                                            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{opp.category}</p>
-                                                            <p className="font-bold text-sm leading-tight">{opp.subcategory}</p>
+                                                            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 mb-2">
+                                                                Sobreprecio Detectado
+                                                            </Badge>
+                                                            <h4 className="text-lg font-bold text-foreground leading-tight">
+                                                                {opp.currentProvider || opp.subcategory}
+                                                            </h4>
+                                                            <p className="text-xs font-bold text-muted-foreground uppercase mt-0.5">{opp.category}</p>
+                                                        </div>
+                                                        <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center flex-shrink-0 ml-2">
+                                                            <Icon className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                                                         </div>
                                                     </div>
-                                                    <div className="space-y-2">
-                                                        <div className="flex justify-between text-xs font-medium">
-                                                            <span className="text-muted-foreground">Pagás hoy:</span>
-                                                            <span className="font-bold">{formatCurrency(opp.currentAmount)}</span>
-                                                        </div>
-                                                        <div className="flex justify-between text-xs font-medium">
-                                                            <span className="text-muted-foreground">Promedio mercado:</span>
-                                                            <span className="text-status-ok font-bold">{formatCurrency(opp.marketAverage)}</span>
-                                                        </div>
+
+                                                    <div className="flex items-end gap-2 mb-4">
+                                                        <span className="text-3xl font-black text-emerald-600 dark:text-emerald-400">
+                                                            {formatCurrency(opp.potentialSavings)}
+                                                        </span>
+                                                        <span className="text-sm text-muted-foreground font-medium mb-1">
+                                                            de ahorro
+                                                        </span>
                                                     </div>
-                                                    <div className="mt-4 pt-4 border-t border-border/50">
-                                                        <div className="flex items-center gap-2 text-status-ok font-black text-lg">
-                                                            <TrendingDown className="w-5 h-5" />
-                                                            -{opp.potentialSavingsPercent.toFixed(0)}%
+
+                                                    <div className="space-y-2 pt-4 border-t border-emerald-500/10 text-sm">
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-muted-foreground">Estás pagando:</span>
+                                                            <span className="font-bold line-through opacity-70 text-foreground">{formatCurrency(opp.currentAmount)}</span>
                                                         </div>
-                                                        <p className="text-[10px] text-muted-foreground font-medium">Ahorro potencial estimado</p>
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-muted-foreground">Promedio en tu zona:</span>
+                                                            <span className="font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(opp.marketAverage)}</span>
+                                                        </div>
                                                     </div>
                                                 </div>
 
-                                                {/* Alternatives */}
-                                                <div className="p-6 flex-1 flex flex-col justify-center bg-card">
-                                                    <h4 className="text-sm font-bold mb-4 flex items-center gap-2">
-                                                        <Users className="w-4 h-4 text-primary" />
-                                                        Alternativas relevadas en tu zona
+                                                {/* Right Column: Alternatives */}
+                                                <div className="p-6 flex-1 flex flex-col justify-center bg-card/60">
+                                                    <h4 className="text-sm font-bold mb-4 flex items-center gap-2 text-foreground">
+                                                        <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                                                        Tenemos alternativas relevadas más baratas:
                                                     </h4>
                                                     <div className="space-y-3">
                                                         {opp.alternatives.length > 0 ? (
                                                             opp.alternatives.map((alt, aIdx) => (
-                                                                <div key={aIdx} className="flex items-center justify-between p-3 rounded-xl bg-muted/10 border border-border/30 hover:bg-muted/20 transition-colors">
+                                                                <div key={aIdx} className="flex items-center justify-between p-3 rounded-xl bg-background border border-border/50 hover:bg-muted/50 transition-colors">
                                                                     <div className="flex flex-col">
                                                                         <div className="flex items-center gap-1.5">
-                                                                            <span className="text-sm font-black">{alt.name}</span>
+                                                                            <span className="text-sm font-bold text-foreground">{alt.name}</span>
                                                                             {alt.inNeighborhood && (
-                                                                                <Badge variant="outline" className="h-4 p-0 px-1 text-[8px] border-primary/20 bg-primary/5 text-primary">
+                                                                                <Badge variant="outline" className="h-4 p-0 px-1.5 text-[9px] border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
                                                                                     Mismo barrio
                                                                                 </Badge>
                                                                             )}
                                                                         </div>
-                                                                        <span className="text-[10px] text-muted-foreground font-bold">
-                                                                            Promedio: {formatCurrency(alt.averageAmount)} ({alt.count} reportes)
+                                                                        <span className="text-xs text-muted-foreground mt-0.5">
+                                                                            Promedio cobrado: {formatCurrency(alt.averageAmount)} ({alt.count} reportes)
                                                                         </span>
                                                                     </div>
-                                                                    <Badge variant="secondary" className="bg-status-ok/10 text-status-ok border-status-ok/20">
-                                                                        Ahorro: {formatCurrency(opp.currentAmount - alt.averageAmount)}
-                                                                    </Badge>
+                                                                    <div className="text-right">
+                                                                        <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 shadow-none font-bold">
+                                                                            Ahorro {formatCurrency(opp.currentAmount - alt.averageAmount)}
+                                                                        </Badge>
+                                                                    </div>
                                                                 </div>
                                                             ))
                                                         ) : (
                                                             <div className="text-center py-6 bg-muted/5 rounded-xl border border-dashed border-border/30">
                                                                 <p className="text-xs text-muted-foreground font-medium">
-                                                                    Buscando proveedores específicos...
+                                                                    Buscando proveedores específicos en tu zona...
                                                                 </p>
                                                             </div>
                                                         )}

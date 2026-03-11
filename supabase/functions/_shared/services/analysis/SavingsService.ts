@@ -1,4 +1,5 @@
 import { createSupabaseClient, createServiceClient } from "../../config/supabase.ts";
+import { normalizeForComparison } from "../../utils/string.utils.ts";
 
 export interface SavingsOpportunity {
     type: "provider" | "administrator";
@@ -82,7 +83,7 @@ export class SavingsService {
 
             let marketQuery = adminSupabase
                 .from("anonymized_provider_prices")
-                .select("amount, provider_name, neighborhood")
+                .select("amount, provider_name, provider_cuit, neighborhood")
                 .ilike("subcategory_name", `%${normalizedSubName}%`)
                 .eq("period", analysis.period); // Mismo periodo para comparación justa (anti-inflación)
 
@@ -108,9 +109,23 @@ export class SavingsService {
             // If current price is significantly above average (> 15%)
             if (sub.amount > average * 1.15) {
                 // Group by provider to find alternatives
-                const providerStats = new Map<string, { total: number; count: number; inNeighborhood: boolean }>();
+                const currentProviderNameNorm = sub.provider_name ? normalizeForComparison(sub.provider_name) : "";
+                const currentProviderCuit = sub.provider_cuit ? sub.provider_cuit.replace(/\D/g, "") : "";
+
+                const providerStats = new Map<string, { total: number; count: number; inNeighborhood: boolean; cuit?: string }>();
                 marketData.forEach((d: any) => {
-                    const stats = providerStats.get(d.provider_name) || { total: 0, count: 0, inNeighborhood: false };
+                    // Filter out current provider by name or CUIT
+                    const marketProviderNameNorm = d.provider_name ? normalizeForComparison(d.provider_name) : "";
+                    const marketProviderCuit = d.provider_cuit ? d.provider_cuit.replace(/\D/g, "") : "";
+
+                    const isSameByName = currentProviderNameNorm && marketProviderNameNorm === currentProviderNameNorm;
+                    const isSameByCuit = currentProviderCuit && marketProviderCuit === currentProviderCuit;
+
+                    if (isSameByName || isSameByCuit) {
+                        return; // Skip current provider
+                    }
+
+                    const stats = providerStats.get(d.provider_name) || { total: 0, count: 0, inNeighborhood: false, cuit: d.provider_cuit };
                     stats.total += Number(d.amount);
                     stats.count += 1;
                     if (buildingProfile?.neighborhood && d.neighborhood === buildingProfile.neighborhood) {

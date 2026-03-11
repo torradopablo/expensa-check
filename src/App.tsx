@@ -21,6 +21,8 @@ import Perfil from "./pages/Perfil";
 import UpdatePassword from "./pages/UpdatePassword";
 import PrepararReunion from "./pages/PrepararReunion";
 import Proximamente from "./pages/Proximamente";
+import Pitch from "./pages/Pitch";
+import PitchSlides from "./pages/PitchSlides";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -63,6 +65,8 @@ const App = () => {
                 <Route path="/perfil" element={<Perfil />} />
                 <Route path="/update-password" element={<UpdatePassword />} />
                 <Route path="/preparar-reunion" element={<PrepararReunion />} />
+                <Route path="/pitch" element={<Pitch />} />
+                <Route path="/presentacion" element={<PitchSlides />} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />
               </>
