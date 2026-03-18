@@ -21,7 +21,8 @@ import {
   User,
   Briefcase,
   Building2,
-  LayoutList
+  LayoutList,
+  Instagram
 } from "lucide-react";
 import { Logo } from "@/components/layout/ui/logo";
 
@@ -804,7 +805,10 @@ const Footer = () => (
           © 2026 ExpensaCheck. Todos los derechos reservados.
         </p>
         <div className="flex gap-8">
-          {/* Social icons could go here */}
+          <a href="https://www.instagram.com/expensacheck/" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors hover:scale-110 transform duration-300">
+            <Instagram className="w-6 h-6" />
+            <span className="sr-only">Instagram</span>
+          </a>
         </div>
       </div>
     </div>

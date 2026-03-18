@@ -2,8 +2,14 @@
 
 This file contains implementation considerations and strategies for each project release.
 
+## [1.14.0] - 2026-03-19
+
+### Deployment Strategy & Considerations
+> **Information**: Improved landing page
+
 
 ## [1.13.0] - 2026-03-11
+
 ### Deployment Strategy & Considerations
 > **Information**: This version update favicon.ico
 
