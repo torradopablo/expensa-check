@@ -71,18 +71,21 @@ const AhorroPage = () => {
 
     useEffect(() => {
         const fetchOpportunities = async () => {
-            if (!id) return;
-
-            setIsLoading(true);
-            setAnalysis(null);
-            setOpportunities([]);
-
             try {
                 const { data: { session } } = await supabase.auth.getSession();
                 if (!session) {
                     navigate("/auth");
                     return;
                 }
+
+                if (!id) {
+                    setIsLoading(false);
+                    return;
+                }
+
+                setIsLoading(true);
+                setAnalysis(null);
+                setOpportunities([]);
 
                 // Call Edge Function
                 const { data: response, error: functionError } = await supabase.functions.invoke(
